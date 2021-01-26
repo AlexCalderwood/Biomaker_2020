@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import os
+import sys
 from datetime import datetime
 
 def setup_dirs(dirList):

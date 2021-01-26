@@ -2,11 +2,11 @@
 from preprocessor_functions import *
 
 # path to directory containg images to process
-in_dir = '/Users/calderwa/projects/biomaker/data/\
-Example Arabidopsis rosette images/plate_images/'
-out_dir_ROI = '/Users/calderwa/projects/biomaker/data/preprocessed_images/ROIs/'
-out_dir_sanity = '/Users/calderwa/projects/biomaker/data/preprocessed_images/\
-intermediate/'
+scriptd = sys.path[0]
+in_dir = scriptd + '/example_input/'
+out_dir_ROI = scriptd + '/example_output/ROIs/'
+out_dir_sanity = scriptd + '/example_output/intermediate/'
+
 
 out_width = 500  # px width of output segmented imgs
 out_height = 500
