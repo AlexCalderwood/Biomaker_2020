@@ -3,6 +3,7 @@ here::i_am('plotting_and_stats/make_example_data.R') # declare location of curre
 library(here)
 library(data.table)
 library(ggplot2)
+library(splines)
 
 linear <- function(x, m, c) {
   y = (m * x) + c
@@ -38,6 +39,7 @@ grpsize = 7 # number of plants in each group
 groups = c('G1', 'G2', 'G3') # ids of the different groups
 
 
+
 # generate some timeseries. Want some periodic, some monotonic, some whatever,
 # and some combinations of these.
 # want each group to be same, with some noise between plants
@@ -46,19 +48,33 @@ groups = c('G1', 'G2', 'G3') # ids of the different groups
 set.seed(5)
 datalist= list()
 x = seq(0, 1, length.out = length(times))
+
+# calculate some basis splines
+num_knots <- 5 # number of knots to use in B-splines
+B <-  t(bs(x, 
+           knots=seq(min(x), max(x), length.out=num_knots), 
+           degree=3, 
+           intercept = TRUE)) # B-spline values over X
+num_basis <- nrow(B)
+
 for (gi in 1:length(unique(groups))) {
 
-  # set group paramater values
-  # linear
-  mg = runif(1, min= 1, max=5)
-  cg = runif(1, min = 0.1, max=5)
-  # sin
-  kg = runif(1, min = 0.05, max = 0.15)
-  # sigmoid
-  maxg = runif(1, min=1, max=5)
-  lg = runif(1, min=6, max=20)
+  # set group paramater values - have grp1 != grp2 == grp3
+  if (gi != 3) {
+    # linear
+    mg = runif(1, min= 1, max=5)
+    cg = runif(1, min = 0.1, max=5)
+    # sin
+    kg = runif(1, min = 0.05, max = 0.15)
+    # sigmoid
+    maxg = runif(1, min=1, max=5)
+    lg = runif(1, min=6, max=20)
+    # splines
+    ag = rnorm(n=num_basis, mean = 0, sd = 1)
+  }
   # tanh - reusing others gives fine resutls
 
+  # set plant level parameters - differ for all groups
   for (pi in 1:grpsize) {
     pID = ((gi-1) * grpsize) + pi
     
@@ -72,13 +88,16 @@ for (gi in 1:length(unique(groups))) {
     maxp = maxg + rnorm(1, mean=0, sd=0.15)
     lp = lg + rnorm(1, mean=0, sd=0.5)
     # tanh
+    # splines
+    ap = ag + rnorm(n=num_basis, mean=0, sd=0.1)
     
     # calculate some function values for each plant, with observational noise
     yLin = linear(x, mp, cp) + rnorm(length(x), mean=0, sd = 0.01)
     ySin = sin(x / kp) + rnorm(length(x), mean=0, sd = 0.05)
     ySig = sigmoid(x, maxp, lp) + rnorm(length(x), mean=0, sd = 0.01)
     yTanh = tanh(x, mp, cp, kp) + rnorm(length(x), mean=0, sd=0.001)
-    
+    ySplines = as.vector(ap %*% B + rnorm(length(x), mean=0, sd=0.01))
+      
     p.df = data.table(data.frame('timepoint'=times_str, 
                                  'plant group'=groups[gi], 
                                  'plant id'=pID,
@@ -87,7 +106,8 @@ for (gi in 1:length(unique(groups))) {
                                  'EG_METRIC_3'=ySig,
                                  'EG_METRIC_4'=yTanh,
                                  'EG_METRIC_5'=yLin+ySin,
-                                 'EG_METRIC_6'=5*yTanh + 0.2*(yLin+ySin)
+                                 'EG_METRIC_6'=5*yTanh + 0.2*(yLin+ySin),
+                                 'EG_METRIC_7'=5*ySplines
                                 ))
     datalist = c(datalist, list(p.df))
   }
@@ -97,19 +117,21 @@ dt = do.call('rbind', datalist)
 
 # test plotting
 dt.m = melt(dt, id.vars=c('timepoint', 'plant.group', 'plant.id'))
-p <- ggplot(dt.m, aes(x=timepoint, y=value, color=plant.group, group=plant.id))+
+dt.m$datetime <- as.POSIXct(dt.m$timepoint, format='%Y-%m-%dT%H-%M-%S')
+
+p <- ggplot(dt.m, aes(x=datetime, y=value, color=plant.group, group=plant.id))+
   facet_wrap(~variable, scales='free')+
-  geom_line(alpha=0.7)+
+  geom_line(alpha=0.6)+
   theme(
-    axis.text.x = element_blank(),
-    axis.ticks.x = element_blank(),
+    axis.text.x = element_text(angle=30, hjust=1),
+    # axis.ticks.x = element_blank(),
     legend.position = 'top'
   )
 
 # save plot and csv of dummy data
 ggsave(
   here::here('plotting_and_stats', 'example_data', 'example_input_plot.pdf'),
-  width=7, height=5
+  width=10, height=10
 )
 fwrite(dt, 
        file=here::here('plotting_and_stats', 'example_data', 'example_input.csv'))
