@@ -28,6 +28,7 @@ stats:
 plotting:
 - ~~Make table showing metric name, and groups differ between if any~~ done!
 - ~~Make plots showing data over time, fitted confidence intervals, and highlight timepoints where metric is same / different between groups.~~ Done!
+- when have final data model selected, might need to fix plot's y_intercept for difference plots.
 
 ## final output
 - save table & plots to file, for import into final results dashboard.
