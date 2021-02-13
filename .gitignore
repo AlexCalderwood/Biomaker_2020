@@ -1,0 +1,12 @@
+cache/
+__pycache__/
+
+*.pyc
+
+*.bak
+*~
+.DS_Store
+
+.vscode/
+
+*.html
