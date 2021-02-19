@@ -5,7 +5,9 @@
 - assign consistent plant ids over time-series of same camerafield
 
 ## TODOs:
-- finalise plant identification /masking parameters
+- finalise plant identification /masking parameters - (plantcv documentation
+might have some more ideas for masking approaches if can't get one of these
+working well)
 - finalise segment size parameters
 - finalise resizing (for input to araDEEPopsis) parameters
 
