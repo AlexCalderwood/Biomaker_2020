@@ -5,4 +5,10 @@ library(shiny)
 source(here('dashboard', 'ui.R'))
 source(here('dashboard', 'server.R'))
 
-shiny::shinyApp(ui=ui, server=server)
+# create shiny app object
+app <- shiny::shinyApp(ui=ui, 
+                server=server, 
+                options=list(launch.browser=TRUE))
+
+# run the app in browser. Can run from cmd line, or from within Rstudio.
+runApp(app, launch.browser=TRUE)
