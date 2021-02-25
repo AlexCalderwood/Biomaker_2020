@@ -12,3 +12,4 @@ app <- shiny::shinyApp(ui=ui,
 
 # run the app in browser. Can run from cmd line, or from within Rstudio.
 runApp(app, launch.browser=TRUE)
+

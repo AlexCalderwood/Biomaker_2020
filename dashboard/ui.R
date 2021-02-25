@@ -60,8 +60,74 @@ timeseries_panel <- tabPanel("Timeseries Results",
                              )
                              
 
+# page 3 : show image analysis used in data generation ----------------------
+
+sidebar_content <- wellPanel(
+  fluidRow(selectInput(
+    'images_metric',
+    label = 'Metric:',
+    choices = summary_table$metric)),
+  fluidRow(tags$p("To view the image processing used in generating any weird looking points, select the region
+         of interest with the left hand plot, and click the point(s) in the right hand plot. Images relevant 
+                  to that point will display below."))
+)
+
+main_content <- fluidPage(
+  fluidRow(
+    # plot for selecting zoom region
+    column(width=6,
+           tags$h3('Select region of interest', style='text-align:center;'),
+           plotOutput('imgSelectDataPlot',
+                      brush = brushOpts(
+                        id='dPlot_brush',
+                        resetOnNew=T))),
+    # plot for selecting points
+    column(width=6,
+           tags$h3('Select point of interest', style='text-align:center;'),
+            plotOutput('imgZoomDataPlot',
+                       click='zoomPlotClick',
+                       brush=brushOpts(
+                         id='zoomPlotBrush'
+                       )))),
+  # table about selected point
+  fluidRow(column(width=6, offset=6, align='center',
+                  tableOutput('clickInfo'))),
+  
+  # show preprocessing images relevant to selected point
+  fluidRow(tags$h3(textOutput('testWarning'), style='text-align:center; color:red;')),
+  fluidRow(
+    tags$h3('Selected point preprocessing images:'),
+    column(width=3, 
+           tags$h4('Original Image', style='text-align:center;'), 
+           imageOutput('origImg', height='100%'),
+           tags$h4(textOutput('origImgPath'), style='font-size: 5px;')),
+    column(width=3,
+           tags$h4('Plant Mask', style='text-align:center;'), 
+           imageOutput('maskImg', height='100%'),
+           tags$h4(textOutput('maskImgPath'), style='font-size: 5px;')),
+    column(width=3,
+           tags$h4('Plant Boxes', style='text-align:center;'), 
+           imageOutput('boxImg', height='100%'),
+           tags$h4(textOutput('boxImgPath'), style='font-size: 5px;')),
+    column(width=3,
+           tags$h4('Plant Image', style='text-align:center;'), 
+           imageOutput('ROIImg', height='100%'),
+           tags$h4(textOutput('ROIImgPath'), style='font-size: 5px;'))
+    
+  )
+)
+
+
+
+images_panel <- tabPanel('Image Checking',
+                         titlePanel('Image Checking'),
+                         sidebar_content,
+                         main_content)
+                         #sidebarLayout(sidebar_content,
+                         #              main_content))
 
 # define user interface as combo of above ------------
 ui <- navbarPage('Stressful cabinet', 
                  summary_panel,
-                 timeseries_panel)
+                 timeseries_panel,
+                 images_panel)
