@@ -363,6 +363,10 @@ for (curr.metric in unique(dt.m$variable)) {
   # make plots
   curr.plots <- make_plots(curr.dt)
   
+  # save the table used for making the plots, so can be used with point
+  # selection in ShinyApp
+  saveRDS(curr.dt, file=paste0(plt.dir, '/data.table.rds'))
+
   # save plots as .png so can be treated as imgs by Shiny
   ggsave(paste0(plt.dir, '/data.plot.png'), plot=curr.plots[['data.plot']], width=5, height=5)
   ggsave(paste0(plt.dir, '/plant.fit.plot.png'), plot=curr.plots[['plant.fit.plot']], width=5, height=5)
@@ -371,7 +375,8 @@ for (curr.metric in unique(dt.m$variable)) {
 
   # save plots as .rds so can be treated as plots by Shiny
   # shiny::renderPlot() is too slow to use these.
-  # saveRDS(curr.plots[['data.plot']], file=paste0(plt.dir, '/data.plot.rds'))
+  # need data plot for use in images_panel.
+  saveRDS(curr.plots[['data.plot']], file=paste0(plt.dir, '/data.plot.rds'))
   # saveRDS(curr.plots[['plant.fit.plot']], file=paste0(plt.dir, '/plant.fit.plot.rds'))
   # saveRDS(curr.plots[['grp.fit.plot']], file=paste0(plt.dir, '/grp.fit.plot.rds'))
   # saveRDS(curr.plots[['grp.diff.plot']], file=paste0(plt.dir, '/grp.diff.plot.rds'))
