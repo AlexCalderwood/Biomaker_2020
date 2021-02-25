@@ -35,7 +35,7 @@ def run():
         try:
             input()
 
-            package = generate_package(data=", Hss")
+            package = generate_package(data=", H")
             ser.write(package.encode("utf-8"))  # Send request as the time
             print("Request sent at", datetime.now().strftime("%H:%M:%S"))
             ser_bytes = read_serial_data(ser)
