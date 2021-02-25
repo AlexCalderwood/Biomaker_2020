@@ -46,56 +46,46 @@ server <- function(input, output, session) {
   # for quick convenience, just open as image. Want eventually to be able to 
   # at least open as object, so dynamic sizing works etc.
 
-  # get the paths for the plots for the reactive metric
-  data_plot_path <- reactive({
-    paste0(plotPath, '/', input$timeseries_metric, '/data.plot.png')
-  })
-  plant_fit_plot_path <- reactive({
-    paste0(plotPath, '/', input$timeseries_metric, '/plant.fit.plot.png')
-  })
-  group_fit_plot_path <- reactive({
-    paste0(plotPath, '/', input$timeseries_metric, '/grp.fit.plot.png')
-  })
-  difference_plot_path <- reactive({
-    paste0(plotPath, '/', input$timeseries_metric, '/grp.diff.plot.png')
-  })
-  
   # render the timeseries plots. Use renderImage, as
   # renderPlot is pretty slow.
   output$data_plot <- renderImage(
     {
+     path <- paste0(plotPath, '/', input$timeseries_metric, '/plant.fit.plot.png')
      # use w for width and height, as height doesn't change, 
      # and are the same anyway
      w <- session$clientData$output_data_plot_width 
      #readRDS(data_plot_path())
-      list(src=data_plot_path(),
+      list(src=path,
            width=w,
            height=w)
     }, deleteFile=F
   )
   output$plant_fit_plot <- renderImage(
     {
+      path <- paste0(plotPath, '/', input$timeseries_metric, '/plant.fit.plot.png')
       w <- session$clientData$output_data_plot_width 
       #readRDS(plant_fit_plot_path())
-      list(src=plant_fit_plot_path(),
+      list(src=path,
            width=w,
            height=w)
     }, deleteFile=F
   )
   output$group_fit_plot <- renderImage(
     {
+      path <- paste0(plotPath, '/', input$timeseries_metric, '/grp.fit.plot.png')
       w <- session$clientData$output_data_plot_width 
       #readRDS(group_fit_plot_path())
-      list(src=group_fit_plot_path(),
+      list(src=path,
            width=w,
            height=w)
     }, deleteFile=F
   )
   output$difference_plot <- renderImage(
     {
+      path <- paste0(plotPath, '/', input$timeseries_metric, '/grp.diff.plot.png')
       w <- session$clientData$output_data_plot_width 
       #readRDS(difference_plot_path())
-      list(src=difference_plot_path(),
+      list(src=path,
            width=w,
            height=w)
     }, deleteFile=F
