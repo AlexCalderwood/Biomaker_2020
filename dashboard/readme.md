@@ -10,9 +10,9 @@ sure that output of statistics pipeline, and image segmentation (and anything el
 
 ## final input:
 - ~~plots & table produced from plotting_and_stats~~ done!
-- images showing the steps of the segmentation
-- segmented images (ROIs)
-- images showing masks, and convex hull found by aradeepopsis
+- ~~images showing the steps of the segmentation~~ done!
+- ~~segmented images (ROIs)~~ done!
+- images showing masks, and convex hull found by aradeepopsis - Still to do!
 
 ## jobs:
 - pull all into shinyR framework for convenient browsing and debugging of experiment
