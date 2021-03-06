@@ -14,7 +14,8 @@ plotPath <- paste0(statsPath, '/plots/')
 imgPath <- paste0('www/example_preprocessing_output')
 intImgPath <- paste0(imgPath, '/intermediate/')
 ROIPath <- paste0(imgPath, '/ROIs/')
-
+# path to araDEEPopsis diagnostic images
+deepPath <- paste0('www/example_aradeepopsis_diagnostics/')
 
 red = '#D22D5C'
 green = '#2CD16B'
@@ -119,14 +120,19 @@ server <- function(input, output, session) {
     }
   })
   
-  # track point nearest click event
+  # track point nearest click event, and the relevent images paths for that point
   nearestPoint <- reactiveValues(d=NULL,
                                  rawPath=NULL,
                                  maskPath=NULL,
                                  boxPath=NULL,
                                  ROIPath=NULL,
+                                 cropDeepPath=NULL,
+                                 maskDeepPath=NULL,
+                                 overDeepPath=NULL,
+                                 hullDeepPath=NULL,
                                  isTest=TRUE) # if isTest, substitute dummy files
   
+  # if click a new point, update nearestPoint to track the correct file paths for it
   observe({
     clickPoint <- input$zoomPlotClick
     if (!is.null(clickPoint)) { # need to not change value if not clicked, otherwise keeps changing to null value 
@@ -142,6 +148,7 @@ server <- function(input, output, session) {
       t <- str_replace_all(t, ':', '-')
       # get plant id used in naming files
       plant_id <- as.character(nearestPoint$d$plant.id)
+      
       
       # grep the intermediate images files
       if (!(nearestPoint$isTest)) {
@@ -165,6 +172,31 @@ server <- function(input, output, session) {
         ROI_file <- ROI_files[1]
       }
       nearestPoint$ROIPath <- paste0(ROIPath, ROI_file)
+      
+      
+      # get the araDEEPopsis diagnostic image paths
+      # (assuming that they're named based on the ROI used)
+
+      # trim file extension from ROI
+      if (!(nearestPoint$isTest)) {
+        ROI_stem <- substr(ROI_file, 1, nchar(ROI_file)-4)
+      } else {
+        ROI_stem <- 'image_0003' # if testing, hard code name of test image
+      }
+
+      nearestPoint$cropDeepPath <- paste0(deepPath, 
+                                          'crop/crop_',
+                                          ROI_stem, '.jpeg')
+      nearestPoint$maskDeepPath <- paste0(deepPath, 
+                                          'mask/mask_',
+                                          ROI_stem, '.png')
+      nearestPoint$overDeepPath <- paste0(deepPath, 
+                                          'overlay/overlay_',
+                                          ROI_stem, '.jpeg')
+      nearestPoint$hullDeepPath <- paste0(deepPath, 
+                                          'convex_hull/hull_',
+                                          ROI_stem, '.png')
+       
     }
   })
   
@@ -224,7 +256,7 @@ server <- function(input, output, session) {
   
   output$testWarning <- renderText({
     if (nearestPoint$isTest) {
-      'TESTING WARNING: PREPROCESSING IMAGES ARE JUST TEST IMAGES, NOT CORRECT FOR SELECTED POINT!'
+      'TESTING WARNING: THESE IMAGES ARE JUST TEST IMAGES, NOT CORRECT FOR SELECTED POINT!'
     } else {
       NULL
     }
@@ -291,6 +323,60 @@ server <- function(input, output, session) {
                width=w)
         }, deleteFile=F)
       output$ROIImgPath <- renderText(nearestPoint$ROIPath)
+    }
+  })
+  
+  
+  #### render the aradeepopsis diagnostic images ----
+  observeEvent(nearestPoint$cropDeepPath, {
+    if (!is.null(nearestPoint$cropDeepPath)) {
+      output$cropDeep <- renderImage(
+        {
+          path <- nearestPoint$cropDeepPath
+          w <- session$clientData$output_cropDeep_width
+          list(src=path,
+               width=w)
+        }, deleteFile=F)
+      output$cropDeepPath <- renderText(nearestPoint$cropDeepPath)
+    }
+  })
+  
+  observeEvent(nearestPoint$maskDeepPath, {
+    if (!is.null(nearestPoint$maskDeepPath)) {
+      output$maskDeep <- renderImage(
+        {
+          path <- nearestPoint$maskDeepPath
+          w <- session$clientData$output_maskDeep_width
+          list(src=path,
+               width=w)
+        }, deleteFile=F)
+      output$maskDeepPath <- renderText(nearestPoint$maskDeepPath)
+    }
+  })
+  
+  observeEvent(nearestPoint$overDeepPath, {
+    if (!is.null(nearestPoint$overDeepPath)) {
+      output$overDeep <- renderImage(
+        {
+          path <- nearestPoint$overDeepPath
+          w <- session$clientData$output_overDeep_width
+          list(src=path,
+               width=w)
+        }, deleteFile=F)
+      output$overDeepPath <- renderText(nearestPoint$overDeepPath)
+    }
+  })
+  
+  observeEvent(nearestPoint$hullDeepPath, {
+    if (!is.null(nearestPoint$hullDeepPath)) {
+      output$hullDeep <- renderImage(
+        {
+          path <- nearestPoint$hullDeepPath
+          w <- session$clientData$output_hullDeep_width
+          list(src=path,
+               width=w)
+        }, deleteFile=F)
+      output$hullDeepPath <- renderText(nearestPoint$hullDeepPath)
     }
   })
 }

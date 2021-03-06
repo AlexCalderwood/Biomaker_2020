@@ -62,6 +62,7 @@ timeseries_panel <- tabPanel("Timeseries Results",
 
 # page 3 : show image analysis used in data generation ----------------------
 
+# sidebar ----
 sidebar_content <- wellPanel(
   fluidRow(selectInput(
     'images_metric',
@@ -72,7 +73,9 @@ sidebar_content <- wellPanel(
                   to that point will display below."))
 )
 
-main_content <- fluidPage(
+# main content ----
+
+plots <- fluidRow(
   fluidRow(
     # plot for selecting zoom region
     column(width=6,
@@ -84,47 +87,83 @@ main_content <- fluidPage(
     # plot for selecting points
     column(width=6,
            tags$h3('Select point of interest', style='text-align:center;'),
-            plotOutput('imgZoomDataPlot',
-                       click='zoomPlotClick',
-                       brush=brushOpts(
-                         id='zoomPlotBrush'
-                       )))),
+           plotOutput('imgZoomDataPlot',
+                      click='zoomPlotClick',
+                      brush=brushOpts(
+                        id='zoomPlotBrush'
+                    )))),
   # table about selected point
   fluidRow(column(width=6, offset=6, align='center',
-                  tableOutput('clickInfo'))),
-  
+                  tableOutput('clickInfo')))
+)
+
+preImgs <- wellPanel(
   # show preprocessing images relevant to selected point
-  fluidRow(tags$h3(textOutput('testWarning'), style='text-align:center; color:red;')),
-  fluidRow(
-    tags$h3('Selected point preprocessing images:'),
-    column(width=3, 
-           tags$h4('Original Image', style='text-align:center;'), 
-           imageOutput('origImg', height='100%'),
-           tags$h4(textOutput('origImgPath'), style='font-size: 5px;')),
-    column(width=3,
-           tags$h4('Plant Mask', style='text-align:center;'), 
-           imageOutput('maskImg', height='100%'),
-           tags$h4(textOutput('maskImgPath'), style='font-size: 5px;')),
-    column(width=3,
-           tags$h4('Plant Boxes', style='text-align:center;'), 
-           imageOutput('boxImg', height='100%'),
-           tags$h4(textOutput('boxImgPath'), style='font-size: 5px;')),
-    column(width=3,
-           tags$h4('Plant Image', style='text-align:center;'), 
-           imageOutput('ROIImg', height='100%'),
-           tags$h4(textOutput('ROIImgPath'), style='font-size: 5px;'))
-    
+  # show imags
+    tags$h3('Preprocessing:'),
+    fluidRow(
+      column(width=3, 
+             tags$h4('Original Image', style='text-align:center;'), 
+             imageOutput('origImg', height='100%'),
+             tags$h4(textOutput('origImgPath'), style='font-size: 5px;')),
+      column(width=3,
+             tags$h4('Plant Mask', style='text-align:center;'), 
+             imageOutput('maskImg', height='100%'),
+             tags$h4(textOutput('maskImgPath'), style='font-size: 5px;')),
+      column(width=3,
+             tags$h4('Plant Boxes', style='text-align:center;'), 
+             imageOutput('boxImg', height='100%'),
+             tags$h4(textOutput('boxImgPath'), style='font-size: 5px;')),
+      column(width=3,
+             tags$h4('Plant Image', style='text-align:center;'), 
+             imageOutput('ROIImg', height='100%'),
+             tags$h4(textOutput('ROIImgPath'), style='font-size: 5px;'))
   )
 )
 
+araDeepImages <- wellPanel(
+  tags$h3('AraDEEPopsis:'),
+  fluidRow(
+    column(width=3, 
+           tags$h4('Crop', style='text-align:center;'), 
+           imageOutput('cropDeep', height='100%'),
+           tags$h4(textOutput('cropDeepPath'), style='font-size: 5px;')),
+    column(width=3, 
+           tags$h4('Mask', style='text-align:center;'), 
+           imageOutput('maskDeep', height='100%'),
+           tags$h4(textOutput('maskDeepPath'), style='font-size: 5px;')),
+    column(width=3, 
+           tags$h4('Overlay', style='text-align:center;'), 
+           imageOutput('overDeep', height='100%'),
+           tags$h4(textOutput('overDeepPath'), style='font-size: 5px;')),
+    column(width=3, 
+           tags$h4('Convex Hull', style='text-align:center;'), 
+           imageOutput('hullDeep', height='100%'),
+           tags$h4(textOutput('hullDeepPath'), style='font-size: 5px;'))
+  )
+)
 
+# combo images
+diagnosticImages <- fluidRow(
+  tags$h2('Diagnostic images for selected point:'),
+  # warn if test images
+  fluidRow(tags$h3(textOutput('testWarning'), style='text-align:center; color:red;')),
+  preImgs,
+  araDeepImages
+)
 
+# combo main content
+main_content <- fluidPage(
+  plots, 
+  diagnosticImages
+)
+
+# combo all the above ----
 images_panel <- tabPanel('Image Checking',
                          titlePanel('Image Checking'),
                          sidebar_content,
                          main_content)
-                         #sidebarLayout(sidebar_content,
-                         #              main_content))
+
 
 # define user interface as combo of above ------------
 ui <- navbarPage('Stressful cabinet', 
