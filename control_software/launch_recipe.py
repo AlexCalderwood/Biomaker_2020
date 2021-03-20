@@ -1,4 +1,4 @@
-from logging_utils import *
+from logging_utils import convert_recipe_line, create_new_dir, save_data, request_rgb_image, request_lepton_image, request_env_data
 from time import sleep
 import datetime
 import os
@@ -21,7 +21,7 @@ def run():
                 dirname = start_time.strftime("%y-%m-%d-%H_%M_%S")  # Convert start time to string format
                 dirname = create_new_dir(save_path, dirname)  # Create new folder to put data in, and retrieve created folder name
                 
-                headers = "time_logged, current_temp"  # Headers of logfile
+                headers = "time_logged, t_1, t_2, h_1, h_2, light"  # Headers of logfile
                 with open(f"{save_path}{dirname}/{dirname}.txt", "a") as datafile:  # Create new logfile
                     datafile.write(headers + "\n")  # Write headers with a newline character on the end
 
@@ -29,15 +29,17 @@ def run():
                 now = datetime.datetime.now()
                 time_to_wait = (data[0] - now).total_seconds()
                 if  time_to_wait <= 0:  # Time to gather some data
-
+                    print("Gathering data!")
                     # Gather data
+                    print("data!", data)
+                    env_data = request_env_data(data)
+                    print("env_data", env_data)
+                    sleep(0.5)  # Let the white lights turn on
                     rgb_image = request_rgb_image()
                     ir_image = request_lepton_image()
-                    env_data = request_env_data()
-                    new_data = [data[0], data[2] + 0.5]  # Temporary mock data
 
                     # Save data
-                    save_data(save_path, dirname, rgb_image, ir_image, new_data)
+                    save_data(save_path, dirname, rgb_image, ir_image, env_data)
 
                     # Write data to cloud?
                     concurrent_log = False
