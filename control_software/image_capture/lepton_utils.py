@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+from matplotlib.image import imsave
 import os
 from time import sleep
 
@@ -49,7 +50,7 @@ class LeptonCamera:
         os.system(self.lepton_exe + f" -3 -c {images} -o " + raw_dir + raw_name)
 
 
-    def convert_raw_img(self, raw_dir=None, raw_img_name="frame_000000.gray"):
+    def convert_raw_to_array(self, raw_dir=None, raw_img_name="frame_000000.gray"):
         """ Converts raw .GRAY file to a (120x160) np array of 'int16's
         """
         if not raw_dir:
@@ -59,6 +60,25 @@ class LeptonCamera:
         raw_image.shape = (120,160)
         return raw_image
 
+
+    def convert_raw_to_img(self, img_dir=None, img_name="frame_000000.jpg", raw_dir=None, raw_img_name="frame_000000.gray", cmap="gray"):
+        """ Converts raw .GRAY file to an image file, which is saved to img_name.
+        """
+        if not img_dir:
+            img_dir = self.img_dir
+        if not raw_dir:
+            raw_dir = self.raw_dir
+
+        raw_image = self.convert_raw_to_array(raw_dir, raw_img_name)
+        imsave(img_dir + img_name, raw_image, cmap=cmap)
+
+
+    def generate_img(self, img_dir=None, img_name="frame_000000.png", raw_dir=None, raw_name="frame_", cmap="gray"):
+        """ Obtains a new image from the attached lepton camera, and converts it to an image file
+        """
+        self.generate_raw_img(raw_dir, raw_name)
+        self.convert_raw_to_img(img_dir, img_name, raw_dir, str(raw_name) + "000000.gray", cmap)
+
     
     def generate_img_array(self, raw_dir=None, raw_name="frame_"):
         """ Obtains a new image from attached lepton camera, and converts it to np array
@@ -67,7 +87,7 @@ class LeptonCamera:
             raw_dir = self.raw_dir
         
         self.generate_raw_img(raw_dir, raw_name)
-        return self.convert_raw_img(raw_dir, str(raw_name) + "000000.gray")
+        return self.convert_raw_to_array(raw_dir, str(raw_name) + "000000.gray")
 
 
     def preview(self):
