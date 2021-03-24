@@ -56,7 +56,7 @@ def read_serial_data(ser):
         ser_bytes = ser.readline()  # Read request
         while len(ser_bytes) <= 0:
             ser_bytes = ser.readline()
-            print("Nothing yet")
+            #print("Nothing yet")
     except Exception as e:
         print(e)
         ser.close()

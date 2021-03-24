@@ -55,20 +55,20 @@ def create_new_dir(path, dirname):
             break  # Continue to create directory
 
     os.makedirs(path + dirname)
-    print(f"new folder \'{path}{dirname}\' created!")
+    #print(f"new folder \'{path}{dirname}\' created!")
     return dirname
 
 
-def save_data(path, dirname, rgb_image, ir_image, data):
+def save_data(path, dirname, data):
     """ Saves data to preprogammed location, inside its own new directory.
     The name of the new directory is the first time entry of the recipe + a unique footer as required
     """
     data_string = format_data_string(data)
-    print("log_string", data_string)
+    #print("log_string", data_string)
 
     with open(f"{path}{dirname}/{dirname}.txt", "a") as datafile:
         datafile.write(data_string + "\n")  # Write data with a newline character on the end
-    print(f"data saved to {path}{dirname}!")
+    #print(f"data saved to {path}{dirname}!")
 
 
 def format_data_string(env_data):
@@ -103,32 +103,20 @@ def format_data_string(env_data):
     return data_string
 
 
-def request_rgb_image():
-    sleep(1)
-    print("RGB image retrieved!")
-    return 0
-
-
-def request_lepton_image():
-    sleep(1)
-    print("IR image retrieved!")
-    return 0
-
-
 def request_env_data(request_data):
 
     # Interpret data
     rpi_request = generate_rpi_request(request_data)
-    print("rpi request:", rpi_request)
+    #print("rpi request:", rpi_request)
 
-    ser = open_serial("COM4")
+    ser = open_serial("/dev/ttyACM0")
     try:
         sleep(3)  # FIX THIS
         ser.write(rpi_request.encode("utf-8"))  # Send request as the time
-        print("Request sent at", datetime.datetime.now().strftime("%H:%M:%S"))
+        #print("Request sent at", datetime.datetime.now().strftime("%H:%M:%S"))
         env_string = read_serial_data(ser)
         ser.close()
-        print("env_string:", env_string)
+        #print("env_string:", env_string)
     except Exception as e:
         print(e)
         ser.close()
