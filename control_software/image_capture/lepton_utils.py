@@ -47,8 +47,9 @@ class LeptonCamera:
         if not raw_dir:
             raw_dir = self.raw_dir
 
-        os.system(self.lepton_exe + f" -3 -c {images} -o " + raw_dir + raw_name)
-
+        output = os.system(self.lepton_exe + f" -3 -c {images} -o " + raw_dir + raw_name)
+        if output == 256:
+            raise LeptonError
 
     def convert_raw_to_array(self, raw_dir=None, raw_img_name="frame_000000.gray"):
         """ Converts raw .GRAY file to a (120x160) np array of 'int16's
@@ -91,7 +92,8 @@ class LeptonCamera:
 
 
     def preview(self):
-
+        """ Preview what the Lepton sees in real time.
+        """
         fig, ax = plt.subplots(1,1)
         image = self.generate_img_array(raw_name="frame_1")
         im = ax.imshow(image, cmap='gray')
@@ -101,3 +103,20 @@ class LeptonCamera:
             im.set_data(image)
             fig.canvas.draw_idle()
             plt.pause(1)
+
+
+    def clear_raw_dir(self):
+        """ Clears any and all .gray files from the raw directory - use with caution!
+        """
+        files_in_raw= os.listdir(self.raw_dir)
+        raw_files = [file for file in files_in_raw if file.endswith(".gray")]
+        for file in raw_files:
+            path_to_raw = os.path.join(self.raw_dir, file)
+            os.remove(path_to_raw)
+        return len(raw_files)
+
+
+class LeptonError(Exception):
+    """ Raised when lepton has an error
+    """
+    pass

@@ -1,6 +1,7 @@
 import serial
 import datetime
 from time import sleep
+import datetime
 
 
 def open_serial(port, baudrate=9600, timeout=1):
@@ -51,15 +52,14 @@ def generate_rpi_request(data):
     return rpi_request
 
 
-def read_serial_data(ser):
-    try:
-        ser_bytes = ser.readline()  # Read request
-        while len(ser_bytes) <= 0:
-            ser_bytes = ser.readline()
-            #print("Nothing yet")
-    except Exception as e:
-        print(e)
-        ser.close()
+def read_serial_data(ser, timeout=10):
+    """ Look for serial data in the buffer
+    """
+    read_start = datetime.datetime.now()
+    ser_bytes = ser.readline()  # Read request
+    while len(ser_bytes) <= 0 and (datetime.datetime.now()-read_start).total_seconds() < timeout:
+        ser_bytes = ser.readline()
+        print("Nothing yet")
     if len(ser_bytes) > 0:  # If any data have been received
         return ser_bytes.decode("utf-8")  # Decode the data from binary
     else:

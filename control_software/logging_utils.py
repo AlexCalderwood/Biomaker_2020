@@ -103,24 +103,16 @@ def format_data_string(env_data):
     return data_string
 
 
-def request_env_data(request_data):
+def request_env_data(ser, request_data):
 
     # Interpret data
     rpi_request = generate_rpi_request(request_data)
     #print("rpi request:", rpi_request)
 
-    ser = open_serial("/dev/ttyACM0")
-    try:
-        sleep(3)  # FIX THIS
-        ser.write(rpi_request.encode("utf-8"))  # Send request as the time
-        #print("Request sent at", datetime.datetime.now().strftime("%H:%M:%S"))
-        env_string = read_serial_data(ser)
-        ser.close()
-        #print("env_string:", env_string)
-    except Exception as e:
-        print(e)
-        ser.close()
-        return 1
+    ser.write(rpi_request.encode("utf-8"))  # Send request as the time
+    #print("Request sent at", datetime.datetime.now().strftime("%H:%M:%S"))
+    env_string = read_serial_data(ser)
+    #print("env_string:", env_string)
 
     env_data = convert_env_string(env_string)
 
