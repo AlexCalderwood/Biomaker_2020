@@ -13,16 +13,17 @@ def open_serial(port, baudrate=9600, timeout=1):
 
 
 def generate_rpi_request(data):
-    """ Converts data (as a list) to a string to send to arduino
+    """DEPRECIATED - REPLACED BY MODIFICATIONS TO REQUEST_ENV_DATA"""
+    """ Converts data (as a list) to binary to send to arduino
     
-    1. time (%y-%m-%d-%H:%M:%S date)    - time to read this instruction
-    2. log (Bool)                       - whether to log data for this instruction or just write conditions
-    3. target_temp (int)                - temperature condition to write
-    4. R (int8)                         - Intensity of red light
-    5. Y (int8)                         - Intensity of yellow light
-    6. B (int8)                         - Intensity of blue light
-    7. W (int)                          - Intensity of white light (only high if picture is being taken)
-    8. W_timeout (int)                  - Time for white light to be on (to avoid having to send another request)
+    1. time (%y-%m-%d-%H:%M:%S date) (19)  - time to read this instruction
+    2. log (Bool) (0 - not sent)                  - whether to log data for this instruction or just write conditions
+    3. target_temp (int) (2)               - temperature condition to write
+    4. R (int8) (3)                        - Intensity of red light
+    5. Y (int8) (3)                        - Intensity of yellow light
+    6. B (int8) (3)                        - Intensity of blue light
+    7. W (int8)  (3)                        - Intensity of white light (only high if picture is being taken)
+    8. W_timeout (int) (1)                 - Time for white light to be on (to avoid having to send another request)
 
     """
 

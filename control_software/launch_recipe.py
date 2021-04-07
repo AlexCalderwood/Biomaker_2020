@@ -44,29 +44,30 @@ def run():
                             print("Preparing serial")
                             sleep(2-(datetime.now()-ser_opened).total_seconds())
                         env_data = request_env_data(ser, data)
-                        sleep(0.5)  # Let the white lights turn on
-                        logtime = env_data[0].strftime("%y-%m-%d-%H_%M_%S")
-                        print("IR Image")
-                        try:
-                            ir_image = lepcam.generate_img(img_name=f"IR{logtime}.png")
-                        except LeptonError:
-                            print("Lepton error")
-                        if not picam:
-                            print("Delayed PiCamera created")
-                            picam = PiCamera(resolution=(3280,2464))
-                            picam.rotation = 90
-                            sleep(2)
-                        print("RGB Image")
-                        try:
-                            rgb_image = picam.capture(f"{save_path}{dirname}/RBG{logtime}.jpg")
-                        except Exception as e:
-                            print("Picamera error:", e)
-                        print("Close camera")
-                        picam.close()
-                        picam = None
-                        # Save data
-                        print("Save data")
-                        save_data(save_path, dirname, env_data)
+                        if data[1]:
+                            sleep(0.5)  # Let the white lights turn on
+                            logtime = datetime.now().strftime("%y-%m-%d-%H_%M_%S")
+                            print("IR Image")
+                            try:
+                                ir_image = lepcam.generate_img(img_name=f"IR{logtime}.png")
+                            except LeptonError:
+                                print("Lepton error")
+                            if not picam:
+                                print("Delayed PiCamera created")
+                                picam = PiCamera(resolution=(3280,2464))
+                                picam.rotation = 90
+                                sleep(2)
+                            print("RGB Image")
+                            try:
+                                rgb_image = picam.capture(f"{save_path}{dirname}/RBG{logtime}.jpg")
+                            except Exception as e:
+                                print("Picamera error:", e)
+                            print("Close camera")
+                            picam.close()
+                            picam = None
+                            # Save data
+                            print("Save data")
+                            save_data(save_path, dirname, env_data)
 
                         # Write data to cloud?
                         concurrent_log = False
@@ -77,7 +78,7 @@ def run():
                         break  # Move to the next line
                     elif time_to_wait < 3:  # Start high-speed polling at t-3 seconds
                         print("Polling")
-                        if not picam: # If the picam has not already been woken up
+                        if (not picam) and data[1]: # If the picam has not already been woken up and it needs to be
                             print("PiCamera created")
                             picam = PiCamera(resolution=(3280,2464))
                             picam.rotation = 90
