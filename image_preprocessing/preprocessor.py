@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 from preprocessor_functions import *
 
+
 # path to directory containg images to process
 scriptd = sys.path[0]
 in_dir = scriptd + '/example_input/'
@@ -13,34 +14,83 @@ out_height = 500
 
 setup_dirs([in_dir, out_dir_sanity, out_dir_ROI])
 
+
+### read the images and calculate timeseries order
 imgs = read_images(in_dir, 'RGB')
 img_timeseries_order = get_image_order(imgs) # get filenames ordered by time
-
 ir_imgs = read_images(in_dir, 'IR')
+# print(imgs.keys())
+# print(img_timeseries_order)
+# print(ir_imgs.keys())
+# show_pics(imgs['RGB8_2021-04-08T11-09-51.jpg'])
+# show_pics(ir_imgs['IR7_2021-04-08T11-09-51.png'])
 
-print(imgs.keys())
-print(img_timeseries_order)
-print(ir_imgs.keys())
+##### START OF ALIGNMENT PLAYING ######
+### align the RGB and IR iamges
+# for each key in imgs, if an equivalent IR image exists,
+# align them!
+
+# get equivalent RGB and IR filenames
+for f in imgs.keys():
+    if f.startswith('RGB'):
+        f_IR = f.replace('RGB', 'IR', 1)  # replace first "RGB" only
+
+    if f_IR in ir_imgs.keys():
+
+        # check that equivalent images
+        # show_pics(imgs[f] + ir_imgs[f_IR])
+
+        # do the alignment!
+        # following
+        # https://www.pyimagesearch.com/2020/08/31/image-alignment-and-registration-with-opencv/
+        RGBimg = imgs[f][0]
+        IRimg = ir_imgs[f_IR][0]
+        IR_h = IRimg.shape[0]
+        IR_w = IRimg.shape[1]
+        print(f'IR resolution : {IR_h}, {IR_w}')
+
+        # def align_images(RGBimg, IRimg, maxFeatures=500, keepPercent=0.2,
+        # debug=True):
+        # convert both the grayscale (probably should have edge detection instead?)
+        hsv = cv2.cvtColor(RGBimg, cv2.COLOR_BGR2HSV)
+        lower_light = np.array([20, 80, 0])
+        upper_light = np.array([50, 255, 200])
+        greenMask = cv2.inRange(hsv, lower_light, upper_light)
+        mask_sanity = cv2.bitwise_and(RGBimg, RGBimg, mask=greenMask)
+        #show_pics([RGBimg, mask_sanity])
+
+        RGBGrey = cv2.cvtColor(mask_sanity, cv2.COLOR_BGR2GRAY)
+        IRGrey = cv2.cvtColor(IRimg, cv2.COLOR_BGR2GRAY)
+
+        smallRGBGrey = cv2.resize(RGBGrey, (IR_w, IR_h))
+
+        #show_pics([RGBGrey, IRGrey, smallRGBGrey])
+
+        # user ORB to detect keypoint and extract local invariant features
+        maxFeatures = 500
+        orb = cv2.ORB_create(maxFeatures)
+        (kpsA, descsA) = orb.detectAndCompute(smallRGBGrey, None)
+        (kpsB, descsB) = orb.detectAndCompute(IRGrey, None)
+
+        # draw the images and keypoints
+        RGBKeyImg = cv2.drawKeypoints(smallRGBGrey, kpsA, None,
+                                 color=(0, 255, 0), flags=0)
+        IRKeyImg = cv2.drawKeypoints(IRGrey, kpsB, None,
+                                 color=(0,255,0), flags=0)
+        show_pics([smallRGBGrey, RGBKeyImg, IRGrey, IRKeyImg])
+        print(junk)
+
+        # match the features
+        method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
+        matcher = cv2.DescriptorMatcher_create(method)
+        matches = matcher.match(descsA, descsB, None)
+
+    else:
+        # if no IR equivalent to the RGB image
+        pass
 
 
-#
-# # show_pics(imgs['RGB8_2021-04-08T11-09-51.jpg'])
-# # show_pics(ir_imgs['IR7_2021-04-08T11-09-51.png'])
-#
-#
-# # for each key in imgs, if an equivalent IR image exists,
-# # align them!
-#
-# # get equivalent RGB and IR filenames
-# for f in imgs.keys():
-#     if f.startswith('RGB'):
-#         f_IR = f.replace('RGB', 'IR', 1)  # replace first "RGB" only
-#
-#     # check that equivalent images
-#     show_pics(imgs[f] + ir_imgs[f_IR])
-#
-#     # do the alignment!
-
+### END OF ALIGNMENT PLAYING ####
 
 
 

@@ -15,7 +15,9 @@ def read_images(inDir, prefix):
     return dict of
     {filename (without file extension): [openCV image object]}
     for files in "inDir", starting with "prefix"
-    (prefix intended use to distinguish RGB from IR images)
+    (prefix intended use to distinguish RGB from IR images).
+
+    NB that the values in the returned dict are a list of images!
     '''
 
     files = os.listdir(inDir)
