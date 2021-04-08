@@ -13,8 +13,13 @@ out_height = 500
 
 setup_dirs([in_dir, out_dir_sanity, out_dir_ROI])
 
-imgs = read_images(in_dir)
-img_timeseries_order = get_image_order(in_dir)
+imgs = read_images(in_dir, 'RGB')
+img_timeseries_order = get_image_order(imgs)
+
+ir_imgs = read_images(in_dir, 'IR')
+
+print(imgs.keys())
+print(ir_imgs.keys())
 
 ###########################################################################
 # TODO: normalise image colors
