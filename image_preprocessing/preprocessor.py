@@ -14,12 +14,35 @@ out_height = 500
 setup_dirs([in_dir, out_dir_sanity, out_dir_ROI])
 
 imgs = read_images(in_dir, 'RGB')
-img_timeseries_order = get_image_order(imgs)
+img_timeseries_order = get_image_order(imgs) # get filenames ordered by time
 
 ir_imgs = read_images(in_dir, 'IR')
 
 print(imgs.keys())
+print(img_timeseries_order)
 print(ir_imgs.keys())
+
+
+#
+# # show_pics(imgs['RGB8_2021-04-08T11-09-51.jpg'])
+# # show_pics(ir_imgs['IR7_2021-04-08T11-09-51.png'])
+#
+#
+# # for each key in imgs, if an equivalent IR image exists,
+# # align them!
+#
+# # get equivalent RGB and IR filenames
+# for f in imgs.keys():
+#     if f.startswith('RGB'):
+#         f_IR = f.replace('RGB', 'IR', 1)  # replace first "RGB" only
+#
+#     # check that equivalent images
+#     show_pics(imgs[f] + ir_imgs[f_IR])
+#
+#     # do the alignment!
+
+
+
 
 ###########################################################################
 # TODO: normalise image colors
@@ -48,12 +71,12 @@ roi_imgs = resize_rois(roi_imgs, out_width, out_height)
 print('saving intermediate stages to :'+out_dir_sanity)
 for k in imgs:
     for i in range(len(imgs[k])):
-        cv2.imwrite(out_dir_sanity+k+'_'+str(i), imgs[k][i])
+        cv2.imwrite(out_dir_sanity+k+'_'+str(i)+'.jpg', imgs[k][i])
 
 
 print('saving ROIs to :'+out_dir_ROI)
 for id in roi_imgs:
-    cv2.imwrite(out_dir_ROI+id+'.JPG', roi_imgs[id])
+    cv2.imwrite(out_dir_ROI+id+'.jpg', roi_imgs[id])
 
 # # show state of images
 # for k, i in imgs.items():

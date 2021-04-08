@@ -12,8 +12,9 @@ def setup_dirs(dirList):
 
 def read_images(inDir, prefix):
     '''
-    return dict of {filename: [openCV image object]} for files in "inDir",
-    starting with "prefix"
+    return dict of
+    {filename (without file extension): [openCV image object]}
+    for files in "inDir", starting with "prefix"
     (prefix intended use to distinguish RGB from IR images)
     '''
 
@@ -26,7 +27,8 @@ def read_images(inDir, prefix):
         print(f)
         path = inDir + f
         # print(path)
-        images[f] = [cv2.imread(path)]
+        id, ext = os.path.splitext(f)
+        images[id] = [cv2.imread(path)]
 
     return images
 
@@ -92,9 +94,9 @@ def show_pics(images):
 
         tmp = cv2.resize(tmp, (width, height))  # rescale to 200 x 200 px
         cv2.imshow('image_'+str(i), tmp)
+        cv2.waitKey(0)
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
 
     return
 
