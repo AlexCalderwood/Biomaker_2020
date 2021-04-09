@@ -103,6 +103,86 @@ def show_pics(images):
     return
 
 
+def align_images(imgRef, imgTest, maxFeatures=1000, keepFraction=0.2):
+    '''
+    aligns imgTest to imgRef, following tutorial at :
+    https://www.pyimagesearch.com/2020/08/31/image-alignment-and-registration-with-opencv/
+
+    imgRef and imgTest are cv2 images
+    maxFeatures: is the number of features to be identified for mapping
+    keepFraction: is the proportion of the found features to be equated in the
+    images.
+
+    returns dict of
+    {
+    'alignedImg': alignedImg // imgTest after alignment to imgRef
+    'testImgFeatures': imgFeatures // all the features found in imgTest
+    'refImgFeatures': refFeatures // all the features found in imgRef
+    'matchedFeatures': matchedVis // the equivalent features in both images
+    }
+    '''
+
+    # convert both to black and white
+    refGrey = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
+    imgGrey = cv2.cvtColor(imgTest, cv2.COLOR_BGR2GRAY)
+
+    # use ORB to detect keypoints and extract local invariant features
+    orb = cv2.ORB_create(maxFeatures)
+    (kpsA, descsA) = orb.detectAndCompute(imgGrey, None)
+    (kpsB, descsB) = orb.detectAndCompute(refGrey, None)
+
+    # show the features
+    imgFeatures = cv2.drawKeypoints(imgGrey, kpsA, None, color=(0, 255, 0),
+                                    flags=0)
+    refFeatures = cv2.drawKeypoints(refGrey, kpsB, None, color=(0, 255, 0),
+                                    flags=0)
+
+    # match the features
+    method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
+    matcher = cv2.DescriptorMatcher_create(method)
+    matches = matcher.match(descsA, descsB, None)
+
+    # sort matches by their distance (smaller is more similar)
+    matches = sorted(matches, key=lambda x: x.distance)
+    # keep only the top matches
+    keep = int(len(matches) * keepFraction)
+    matches = matches[:keep]
+
+    # visualise the matched keypoints
+    matchedVis = cv2.drawMatches(refGrey, kpsA, imgGrey, kpsB, matches, None)
+
+    # record which keypoints map to each other
+    ptsA = np.zeros((len(matches), 2), dtype='float')
+    ptsB = np.zeros((len(matches), 2), dtype='float')
+    for (i, m) in enumerate(matches):
+        ptsA[i] = kpsA[m.queryIdx].pt
+        ptsB[i] = kpsB[m.trainIdx].pt
+
+    # compute the homography matrix between the matched points
+    (H, mask) = cv2.findHomography(ptsA, ptsB, method=cv2.RANSAC)
+
+    # use H to align the images
+    (h, w) = imgRef.shape[:2]
+    alignedImg = cv2.warpPerspective(imgTest, H, (w, h))
+
+    out = {'alignedImg': alignedImg,
+           'testImgFeatures': imgFeatures,
+           'refImgFeatures': refFeatures,
+           'matchedFeatures': matchedVis}
+
+    return out
+
+
+def pad_image_height(imageList):
+    '''pad images in imageList from the top to be the same height'''
+
+    mx_ht = max([img.shape[0] for img in imageList])
+
+    outList = [cv2.copyMakeBorder(img, mx_ht - img.shape[0],
+                                  0, 0, 0, cv2.BORDER_CONSTANT,
+                                  value=[0, 0, 0]) for img in imageList]
+    return outList
+
 def make_light_inRange_mask(img):
     # rather than look for plants, look for grey background
     hls = cv2.cvtColor(img, cv2.COLOR_BGR2HLS)
