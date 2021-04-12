@@ -46,28 +46,39 @@ imgTest = smallDst # dst, smallDst, small_blurred
 outstr = 'transformed-small'
 
 # do the alignment
-out = align_images(imgRef, imgTest, maxFeatures=1000, keepFraction=0.2)
+
+# downsample reference image to same resolution as the test image
+#imgRef = to_same_resolution(imgTest, imgRef)
+
+out = align_images(imgRef, imgTest, maxFeatures=3000, keepFraction=0.3)
 refFeatures = out['refImgFeatures']
 imgFeatures = out['testImgFeatures']
 matchedVis = out['matchedFeatures']
 alignedImg = out['alignedImg']
 
-
 # pad heights so can show in one window
-# intermediate images
+# intermediate images of feature points aligned
 p_refFeatures, p_imgFeatures, p_matchedVis = pad_image_height([refFeatures,
                                                                imgFeatures,
                                                                matchedVis])
-# input and output images
-p_imgRef, p_imgTest, p_alignedImg = pad_image_height([imgRef,
-                                                      imgTest,
-                                                      alignedImg])
+mappingPic = np.hstack((p_refFeatures, p_imgFeatures, p_matchedVis))
+cv2.imwrite(f'{playingd}/{outstr}_mapping.JPG',mappingPic)
 
-# make overlay of reference image and the aligned test image
-overlay = cv2.addWeighted(p_imgRef, 0.5, p_alignedImg, 0.5, 0)
+
+# make nice output image to compare inputs, output, aligned image, and the
+# overlay of input and aligned
+# resize small test image to same size as high resolution one
+bigImgTest = to_same_resolution(imgRef, imgTest)
+
+# make overlay of refernce and aligned image
+overlay = make_overlay(imgRef, alignedImg)
+
+# pad the heights
+p_imgRef, p_imgTest, p_alignedImg, p_overlay = pad_image_height([imgRef,
+                                                      bigImgTest,
+                                                      alignedImg,
+                                                      overlay])
 
 # combine all the images & and write to file
-mappingPic = np.hstack((p_refFeatures, p_imgFeatures, p_matchedVis))
-outPic = np.hstack((p_imgRef, p_imgTest, overlay))
-cv2.imwrite(f'{playingd}/{outstr}_mapping.JPG',mappingPic)
+outPic = np.hstack((p_imgRef, p_imgTest, p_alignedImg, p_overlay))
 cv2.imwrite(f'{playingd}/{outstr}_in_out.JPG', outPic)

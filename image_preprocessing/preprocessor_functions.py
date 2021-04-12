@@ -103,7 +103,43 @@ def show_pics(images):
     return
 
 
-def align_images(imgRef, imgTest, maxFeatures=1000, keepFraction=0.2):
+def make_overlay(reference, comparison):
+    '''
+    overlay refernce with comparison image.
+    will be red where comparison is too dark, cyan where it's too light,
+    and grayscale where they align properly
+    '''
+
+    # convert both to greyscale, then get the greyscale as the colour channels
+    # of an BGR image
+    tmp_imgRef = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
+    tmp_imgRef = cv2.merge((tmp_imgRef, tmp_imgRef, tmp_imgRef))
+    tmp_alignedImg = cv2.cvtColor(comparison, cv2.COLOR_BGR2GRAY)
+    tmp_alignedImg = cv2.merge((tmp_alignedImg, tmp_alignedImg, tmp_alignedImg))
+
+    # just overlay the channels of interest
+    tmp_imgRef[:, :, 0:2] = 255 # max out B,G channels
+    tmp_alignedImg[:, :, 2] = 255 # max out R channel
+    overlay = cv2.addWeighted(tmp_imgRef, 0.5, tmp_alignedImg, 0.5, 0)
+
+    return overlay
+
+
+def to_same_resolution(referenceImg, testImg):
+    '''
+    resize testImg to the same resolution as referenceImg
+    returns the resized testImg
+    '''
+
+    sizeRatio = referenceImg.shape[0] / testImg.shape[0]
+    newWidth = int(testImg.shape[0] * sizeRatio)
+    newHeight = int(testImg.shape[1] * sizeRatio)
+
+    imgOut = cv2.resize(testImg, (newWidth, newHeight))
+    return imgOut
+
+
+def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2):
     '''
     aligns imgTest to imgRef, following tutorial at :
     https://www.pyimagesearch.com/2020/08/31/image-alignment-and-registration-with-opencv/
@@ -121,20 +157,37 @@ def align_images(imgRef, imgTest, maxFeatures=1000, keepFraction=0.2):
     'matchedFeatures': matchedVis // the equivalent features in both images
     }
     '''
+    # if images to be aligned are different resolution, then
+    # downsample higher resolution one to similar resolution as other
+    # (if try the other way aroung, ORB matching points are completely wrong).
+    if (origRef[:,:,0].size > origTest[:,:,0].size):
+        bigShape = origRef.shape  # record the larger image dimensions so can
+                                  # resize the aligned image.
+        imgRef = to_same_resolution(origTest, origRef)
+        imgTest = origTest.copy()
+    elif (origTest[:,:,0].size > origRef[:,:,0].size):
+        bigShape = origTest.shape
+        imgTest = to_same_resolution(origRef, origTest)
+        imgRef = origRef.copy()
+    else:
+        bigShape = origRef.shape
+        imgTest = origTest.copy()
+        imgRef = origRef.copy()
 
     # convert both to black and white
     refGrey = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
     imgGrey = cv2.cvtColor(imgTest, cv2.COLOR_BGR2GRAY)
 
     # use ORB to detect keypoints and extract local invariant features
+    print(f'ORB maxFeatures: {maxFeatures}')
     orb = cv2.ORB_create(maxFeatures)
-    (kpsA, descsA) = orb.detectAndCompute(imgGrey, None)
-    (kpsB, descsB) = orb.detectAndCompute(refGrey, None)
+    (kpsA, descsA) = orb.detectAndCompute(refGrey, None)
+    (kpsB, descsB) = orb.detectAndCompute(imgGrey, None)
 
     # show the features
-    imgFeatures = cv2.drawKeypoints(imgGrey, kpsA, None, color=(0, 255, 0),
+    refFeatures = cv2.drawKeypoints(refGrey, kpsA, None, color=(0, 255, 0),
                                     flags=0)
-    refFeatures = cv2.drawKeypoints(refGrey, kpsB, None, color=(0, 255, 0),
+    imgFeatures = cv2.drawKeypoints(imgGrey, kpsB, None, color=(0, 255, 0),
                                     flags=0)
 
     # match the features
@@ -147,6 +200,7 @@ def align_images(imgRef, imgTest, maxFeatures=1000, keepFraction=0.2):
     # keep only the top matches
     keep = int(len(matches) * keepFraction)
     matches = matches[:keep]
+    print(f'ORB num. matched used: {len(matches)}')
 
     # visualise the matched keypoints
     matchedVis = cv2.drawMatches(refGrey, kpsA, imgGrey, kpsB, matches, None)
@@ -154,18 +208,24 @@ def align_images(imgRef, imgTest, maxFeatures=1000, keepFraction=0.2):
     # record which keypoints map to each other
     ptsA = np.zeros((len(matches), 2), dtype='float')
     ptsB = np.zeros((len(matches), 2), dtype='float')
+
     for (i, m) in enumerate(matches):
         ptsA[i] = kpsA[m.queryIdx].pt
         ptsB[i] = kpsB[m.trainIdx].pt
 
-    # compute the homography matrix between the matched points
-    (H, mask) = cv2.findHomography(ptsA, ptsB, method=cv2.RANSAC)
+    # compute the homography matrix between the matched points to transform
+    # b into a
+    (H, mask) = cv2.findHomography(ptsB, ptsA, method=cv2.RANSAC)
 
-    # use H to align the images
+    # use H to align the images (nb using the full resolution images, not the
+    # downsampled ones used to find H)
     (h, w) = imgRef.shape[:2]
     alignedImg = cv2.warpPerspective(imgTest, H, (w, h))
 
-    out = {'alignedImg': alignedImg,
+    # resize the (small) aligned image up to the reference image size
+    alignedImgBig = cv2.resize(alignedImg, (bigShape[1], bigShape[0]))
+
+    out = {'alignedImg': alignedImgBig,
            'testImgFeatures': imgFeatures,
            'refImgFeatures': refFeatures,
            'matchedFeatures': matchedVis}
@@ -182,6 +242,7 @@ def pad_image_height(imageList):
                                   0, 0, 0, cv2.BORDER_CONSTANT,
                                   value=[0, 0, 0]) for img in imageList]
     return outList
+
 
 def make_light_inRange_mask(img):
     # rather than look for plants, look for grey background
