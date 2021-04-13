@@ -131,16 +131,34 @@ def to_same_resolution(referenceImg, testImg):
     returns the resized testImg
     '''
 
-    sizeRatio = referenceImg.shape[0] / testImg.shape[0]
-    newWidth = int(testImg.shape[0] * sizeRatio)
-    newHeight = int(testImg.shape[1] * sizeRatio)
+    heightRatio = referenceImg.shape[0] / testImg.shape[0]
+    widthRatio = referenceImg.shape[1] / testImg.shape[1]
+
+    newWidth = int(testImg.shape[1] * widthRatio)
+    newHeight = int(testImg.shape[0] * heightRatio)
 
     imgOut = cv2.resize(testImg, (newWidth, newHeight))
     return imgOut
 
 
+def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
+    """Return a sharpened version of the image, using an unsharp mask.
+    https://stackoverflow.com/questions/4993082/how-can-i-sharpen-an-image-in-opencv
+    """
+    blurred = cv2.GaussianBlur(image, kernel_size, sigma)
+    sharpened = float(amount + 1) * image - float(amount) * blurred
+    sharpened = np.maximum(sharpened, np.zeros(sharpened.shape))
+    sharpened = np.minimum(sharpened, 255 * np.ones(sharpened.shape))
+    sharpened = sharpened.round().astype(np.uint8)
+    if threshold > 0:
+        low_contrast_mask = np.absolute(image - blurred) < threshold
+        np.copyto(sharpened, image, where=low_contrast_mask)
+    return sharpened
+
+
 def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
-                 align_to='IR'):
+                 filterGreen=True, sharpenIR = True,
+                 DEBUG=True):
 
     '''
     aligns imgTest to imgRef, following tutorial at :
@@ -152,9 +170,9 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
     maxFeatures: is the number of features to be identified for mapping
     keepFraction: is the proportion of the found features to be equated in the
     images.
-    align_to: string. If origTest is an IR image, set to "IR". Will filter
-    origRef to only keep green pixels for use in finding H matrix. (Assumes that
-    plants are lighter than background in IR (origTest) image).
+    filterGreen: bool. If true, will filter origRef to only retain green pixels
+    prior to registration. Really helps when aligning green plants!
+    sharpenIR: bool. If true, will sharpen origTest prior to alignment
 
     returns dict of
     {
@@ -186,7 +204,7 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
     # if aligning BRG image to IR image, then to get equivalent features,
     # need to filter BGR image to only keep the plants, (assumes plants are
     # lighter than background in the IR image)
-    if align_to == 'IR':
+    if filterGreen:
         print('filtering BGR to only keep green...')
         # hsv format green colour range
         # h(ue) 0 -> 180
@@ -196,10 +214,19 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
         greenUpr = np.array([50, 255, 200])
         imgRef = hsv_filter(imgRef, greenLwr, greenUpr)
 
+    if sharpenIR:
+        print('sharpening IR...')
+        imgSharp = unsharp_mask(imgTest, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0)
+        show_pics([imgTest, imgSharp])
+        imgTest = imgSharp
 
     # convert both to black and white
     refGrey = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
     imgGrey = cv2.cvtColor(imgTest, cv2.COLOR_BGR2GRAY)
+
+    if DEBUG:
+        print('ln206')
+        show_pics([refGrey])
 
     # use ORB to detect keypoints and extract local invariant features
     print(f'ORB maxFeatures: {maxFeatures}')
@@ -214,8 +241,9 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
                                     flags=0)
 
     # match the features
-    method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
-    matcher = cv2.DescriptorMatcher_create(method)
+    # method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
+    # matcher = cv2.DescriptorMatcher_create(method)
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     matches = matcher.match(descsA, descsB, None)
 
     # sort matches by their distance (smaller is more similar)
@@ -224,10 +252,15 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
     keep = int(len(matches) * keepFraction)
     matches = matches[:keep]
     print(f'ORB num. matched used: {len(matches)}')
+    if len(matches) < 4:
+        exit('Error: need more than 4 matched features to find homography matrix!')
 
     # visualise the matched keypoints
     matchedVis = cv2.drawMatches(refGrey, kpsA, imgGrey, kpsB, matches, None)
 
+    if DEBUG:
+        print('ln236)')
+        show_pics([matchedVis])
     # record which keypoints map to each other
     ptsA = np.zeros((len(matches), 2), dtype='float')
     ptsB = np.zeros((len(matches), 2), dtype='float')

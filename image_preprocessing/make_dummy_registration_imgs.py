@@ -12,7 +12,7 @@ for file in os.listdir(playingd):
     if file[0:3] != 'RGB':
         continue
 
-    outfile = 'IR' + file[3:]
+    outfile = 'IR' + file[3:-3] + 'png'
 
     origPath = playingd + file
     outPath = playingd + outfile
