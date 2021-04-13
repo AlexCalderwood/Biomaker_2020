@@ -139,15 +139,22 @@ def to_same_resolution(referenceImg, testImg):
     return imgOut
 
 
-def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2):
+def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
+                 align_to='IR'):
+
     '''
     aligns imgTest to imgRef, following tutorial at :
     https://www.pyimagesearch.com/2020/08/31/image-alignment-and-registration-with-opencv/
 
-    imgRef and imgTest are cv2 images
+    imgRef and imgTest are cv2 images. Expect both to be 3 channel images,
+    even if greyscale. imgRef should be high res BGR image. imgTest should be
+    low res IR image.
     maxFeatures: is the number of features to be identified for mapping
     keepFraction: is the proportion of the found features to be equated in the
     images.
+    align_to: string. If origTest is an IR image, set to "IR". Will filter
+    origRef to only keep green pixels for use in finding H matrix. (Assumes that
+    plants are lighter than background in IR (origTest) image).
 
     returns dict of
     {
@@ -157,15 +164,16 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2):
     'matchedFeatures': matchedVis // the equivalent features in both images
     }
     '''
+
     # if images to be aligned are different resolution, then
     # downsample higher resolution one to similar resolution as other
     # (if try the other way aroung, ORB matching points are completely wrong).
-    if (origRef[:,:,0].size > origTest[:,:,0].size):
+    if (origRef[:, :, 0].size > origTest[:, :, 0].size):
         bigShape = origRef.shape  # record the larger image dimensions so can
                                   # resize the aligned image.
         imgRef = to_same_resolution(origTest, origRef)
         imgTest = origTest.copy()
-    elif (origTest[:,:,0].size > origRef[:,:,0].size):
+    elif (origTest[:,:,0].size > origRef[:, :, 0].size):
         bigShape = origTest.shape
         imgTest = to_same_resolution(origRef, origTest)
         imgRef = origRef.copy()
@@ -173,6 +181,21 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2):
         bigShape = origRef.shape
         imgTest = origTest.copy()
         imgRef = origRef.copy()
+
+
+    # if aligning BRG image to IR image, then to get equivalent features,
+    # need to filter BGR image to only keep the plants, (assumes plants are
+    # lighter than background in the IR image)
+    if align_to == 'IR':
+        print('filtering BGR to only keep green...')
+        # hsv format green colour range
+        # h(ue) 0 -> 180
+        # s(sturation) 0 -> 255
+        # v(alue) 0 -> 255
+        greenLwr = np.array([20, 80, 0])
+        greenUpr = np.array([50, 255, 200])
+        imgRef = hsv_filter(imgRef, greenLwr, greenUpr)
+
 
     # convert both to black and white
     refGrey = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
@@ -263,6 +286,16 @@ def make_light_inRange_mask(img):
     mask_sanity = cv2.bitwise_and(img, img, mask=inv_mask_b)
 
     return [inv_mask_b, mask_sanity]
+
+def hsv_filter(bgr_img, lwr, upr):
+    '''
+    filter BGR image to get pixels between lwr, and upr in hsv color scheme
+    returns BGR image after filtering, only keeping those pixels
+    '''
+    hsv = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, lwr, upr)
+    res = cv2.bitwise_and(bgr_img, bgr_img, mask=mask)
+    return res
 
 
 def make_green_inRange_mask(img):
