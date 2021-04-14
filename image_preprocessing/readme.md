@@ -17,8 +17,16 @@ working well)
 - calculate size / scale of pixels in final image
 
 ## final input:
-- directory of color images, named as "cameraField_YYYY-MM-DDTHH-MM-SS.JPG"
-- directory of thermal images, named as "cameraField_YYYY-MM-DDTHH-MM-SS.XXFORMATXX"
+- single directory of RGB & IR images
+- named as "<prefix>_YYYY-MM-DDTHH-MM-SS.JPG", where timestamp is time image is taken.
+
+- underscore is used to split timestamp from prefix, so DON'T use them in the prefix!
+- timestamp format must be as shown above
+
+- IR image prefix expected to start with "IR"
+- RGB image prefix expected to start with "RGB"
+- expecting to see each timestamp twice - one for RGB image, one for IR image
+
 
 ## final jobs:
 - calculate pixel size (because e.g. evaporative flux calculation needs to know leaf sizes)

@@ -10,19 +10,27 @@ def setup_dirs(dirList):
             os.makedirs(d)
 
 
-def read_images(inDir):
-    # return dict of {filename: [openCV image object]}
+def read_images(inDir, prefix):
+    '''
+    return dict of
+    {filename (without file extension): [openCV image object]}
+    for files in "inDir", starting with "prefix"
+    (prefix intended use to distinguish RGB from IR images).
+
+    NB that the values in the returned dict are a list of images!
+    '''
 
     files = os.listdir(inDir)
     # ignore hidden files
-    files = [f for f in os.listdir(inDir) if not f.startswith('.')]
+    files = [f for f in os.listdir(inDir) if f.startswith(prefix)]
     images = {}
 
     for i, f in enumerate(files):
         print(f)
         path = inDir + f
         # print(path)
-        images[f] = [cv2.imread(path)]
+        id, ext = os.path.splitext(f)
+        images[id] = [cv2.imread(path)]
 
     return images
 
@@ -39,21 +47,22 @@ def filename_to_timestamp(fName):
     return date
 
 
-def get_image_order(inDir):
+def get_image_order(imgDict):
     '''
-    read the filenames in inDir, and return dict with order images taken in
-    for each PREFIX.
+    take dict of images with keys are filenames, values are opencv img object.
+    return dict with order images taken in for each PREFIX.
 
-    assumes filenames are PREFIX_TIMESTAMP.xxx format
-
-    where PREFIX identifies camera view
-    where TIMESTAMP is YYYY-mm-ddTHH-MM-SS
+    assumes filenames are PREFIX_TIMESTAMP.xxx format,
+    - where PREFIX has no underscores in.
+    - where TIMESTAMP is YYYY-mm-ddTHH-MM-SS
 
     returns dict of {prefix : [filenames with prefix in time order]}
     '''
 
     # ignore hidden files
-    files = [f for f in os.listdir(inDir) if not f.startswith('.')]
+    #files = [f for f in os.listdir(inDir) if not f.startswith('.')]
+    files = imgDict.keys()
+
     sorted_files = {}
 
     prefixes = set([f.split('_')[0] for f in files])
@@ -87,9 +96,9 @@ def show_pics(images):
 
         tmp = cv2.resize(tmp, (width, height))  # rescale to 200 x 200 px
         cv2.imshow('image_'+str(i), tmp)
+        cv2.waitKey(0)
 
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+        cv2.destroyAllWindows()
 
     return
 
