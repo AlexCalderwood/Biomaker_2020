@@ -110,7 +110,7 @@ def request_env_data(ser, request_data):
     formatted_data[0] = formatted_data[0].strftime("%Y-%m-%d %H:%M:%S")
     del formatted_data[1]  # Logging status not sent to arduino
     if request_data[1]:  # A request accompanied by photos being taken (turn the white lights on)
-        formatted_data.append(255)  # Turn white light intensity to max
+        formatted_data.append(254)  # Turn white light intensity to max
         formatted_data.append(5)  # 5 seconds before white lights turn off again
     else:
         formatted_data.append(0)  # Turn white light intensity to 0
@@ -120,13 +120,11 @@ def request_env_data(ser, request_data):
     # Send data
     print("Request:", formatted_data[0].encode("utf-8"), bytes(formatted_data[1:]))
     ser.write(formatted_data[0].encode("utf-8"))  # Send string request
-    for element in formatted_data:
+    for element in formatted_data[1:]:
         if not (element is None):
-            ser.write(bytes([element]]))  # Send int request
+            ser.write(bytes([element]))  # Send int request
         else:
-            ser.write('?', encoding="utf-8")  # Send alternative 2 bytes
-
-
+            ser.write(bytes([255]))  # Send alternative 1 byte
 
     #print("Request sent at", datetime.datetime.now().strftime("%H:%M:%S"))
     env_string = read_serial_data(ser)

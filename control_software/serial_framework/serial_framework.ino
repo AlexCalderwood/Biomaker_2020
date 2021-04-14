@@ -1,8 +1,11 @@
-String request;
+int received_bytes;
 byte incomingByte;
 unsigned long receive_time;
+unsigned long last_received;  // Time most recent byte was received
+int serial_timeout = 500;  // Time until message is presumed dead and buffer (data array) is emptied
 int flushed_bytes;
-String data;
+byte request[25] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+// Request is initialised as 255 which is overwritten as correct data comes in, or not if the request times out
 
 int target_temp;
 int R_intensity;
@@ -10,6 +13,12 @@ int Y_intensity;
 int B_intensity;
 int W_intensity;
 int W_timeout;
+
+int temp1;
+int temp2;
+int hum1;
+int hum2;
+int light; 
 
 int NTC_PIN1 = A0;
 int LDR_PIN = A1;
@@ -31,7 +40,7 @@ float float_map(float x, float xL, float xU, float yL, float yU, float zero_thre
   else {
     // Denominator is deemed effectively zero
     return -100000000;
-  } 
+  }
 }
 
 
@@ -49,24 +58,23 @@ float read_light(int light_pin) {
 }
 
 
-String collect_data(){
+void update_data(){
   // Amalgamates data from all local sensors
-  float temp1 = read_temperature(NTC_PIN1);
-  float temp2 = 0.0; //read_temperature(NTC_PIN2);
-  float hum1 = 0.54; //read_humidity(HUM_PIN1);
-  float hum2 = 0.55; //read_humidity(HUM_PIN2);
-  float light = read_light(LDR_PIN);
-  return String(temp1) + ", " + String(temp2) + ", " + String(hum1) + ", " + String(hum1) + ", " + String(light);
+  temp1 = read_temperature(NTC_PIN1);
+  temp2 = 0.0; //read_temperature(NTC_PIN2);
+  hum1 = 0.54; //read_humidity(HUM_PIN1);
+  hum2 = 0.55; //read_humidity(HUM_PIN2);
+  light = read_light(LDR_PIN);
 }
 
 
-void interpret_request(String request){
-  target_temp = request.substring(21, 23).toInt();
-  R_intensity = request.substring(25, 28).toInt();
-  Y_intensity = request.substring(30, 33).toInt();
-  B_intensity = request.substring(35, 38).toInt();
-  W_intensity = request.substring(40, 43).toInt();
-  W_timeout = request.substring(45, 46).toInt();
+void interpret_request(){
+  if (request[19] != 0xFF) target_temp = (int) request[19];
+  if (request[20] != 0xFF) R_intensity = (int) request[20];
+  if (request[21] != 0xFF) Y_intensity = (int) request[21];
+  if (request[22] != 0xFF) B_intensity = (int) request[22];
+  if (request[23] != 0xFF) W_intensity = (int) request[23];
+  if (request[24] != 0xFF) W_timeout = (int) request[24];
 }
 
 
@@ -85,14 +93,15 @@ void set_lights(int R, int Y, int B, int W, int W_t) {
 
 // SERIAL HANDLING
 
-void send_ack(String request, String data, unsigned long receive_time, int flushed_bytes) {
-  request += ", ";
-  request += data;
-  request += ", ";
-  request += String(millis() - receive_time);
-  request += ", ";
-  request += String(flushed_bytes);
-  Serial.println(request);
+void send_ack() {
+  Serial.write(request, sizeof(request));
+  Serial.write(temp1);
+  Serial.write(temp2);
+  Serial.write(hum1);
+  Serial.write(hum2);
+  Serial.write(light);
+  Serial.write(millis()- receive_time);
+  Serial.write(flushed_bytes);
 }
 
 
@@ -117,25 +126,33 @@ void setup() {
 
 
 void loop() {
-  int request_length = 46;  // Number of bytes long the request will be
+  int expected_bytes = sizeof(request);  // Number of bytes long the request will be
 
-  if (request.length() == request_length) { // Update states for newly receieved request
+  if (received_bytes == expected_bytes) { // Update states for newly receieved request
     flushed_bytes = flush_serial();  // Clear any remaining (eroneous) bytes from the buffer and log how many cleared
-    interpret_request(request);
-    data = collect_data();
-    send_ack(request, data, receive_time, flushed_bytes);  // Send return data
-    request = "";
+    interpret_request();  // Read new instructions from request
+    update_data();  // Read fresh data from sensors
+    send_ack();  // Send return data
+    received_bytes = 0;
+    for (int i = 0; i<sizeof(request); i++) {
+      request[i] = 0xFF;  // Reset data to be all 255
+    }
   }
   else if (Serial.available() > 0) { // Request is being received (ongoing)
-    if (request.length() == 0) {
+    if (received_bytes == 0) {
       // This code only runs once per request
-      receive_time = millis();
+      receive_time = millis();  // Time when first byte of message was received
     }
     // read the incoming byte:
     incomingByte = Serial.read();
     if (incomingByte != 10) {  // If incoming byte isn't a new-line character
-      request += char(incomingByte);
+      request[received_bytes] = incomingByte;
+      received_bytes = received_bytes + 1;
+      last_received = millis();
     }
+  }
+  else if (received_bytes > 0 and (millis()-last_received) > serial_timeout) {
+    received_bytes = expected_bytes; // Jump to the processing, assume nothing else is coming
   }
 
   set_temperature(target_temp);
