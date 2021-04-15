@@ -110,6 +110,14 @@ def show_pics(images, origRes=False):
 
 def make_overlay(reference, comparison):
     '''
+    overlay reference image with comparison image
+    '''
+    overlay = cv2.addWeighted(reference, 0.3, comparison, 0.7, 0)
+    return overlay
+
+
+def make_false_color_overlay(reference, comparison):
+    '''
     overlay reference image with comparison image.
     will be red where comparison is too dark, cyan where it's too light,
     and grayscale where they align properly
@@ -191,7 +199,9 @@ def downsample_resolution(origRef, origTest):
     return imgRef, imgTest
 
 
-def prep_images_for_align(origRef, origTest, filterGreen=True, sharpenIR=True):
+def prep_images_for_align(origRef, origTest,
+                          filterGreen=True, highlightGreen=True,
+                          sharpenIR=True):
 
     '''Bundles all the transformations to apply to BGR (origRef), and IR (origTest)
     images to prepare them for alignment/registration.
@@ -208,6 +218,14 @@ def prep_images_for_align(origRef, origTest, filterGreen=True, sharpenIR=True):
     # if try the other way around ("upsample"), ORB matching points are
     # completely wrong).
     imgRef, imgTest = downsample_resolution(origRef.copy(), origTest.copy())
+
+
+    if highlightGreen:
+        print('highlighting BGR to make green real bright...')
+        greenLwr = np.array([30, 80, 50])
+        greenUpr = np.array([50, 255, 200])
+        highlight = (255, 255, 255)
+        imgRef = hsv_set_to(imgRef, greenLwr, greenUpr, highlight)
 
     # filter BGR image to only keep the plants, (to be beneficial, assumes
     # plants are lighter than background in the IR image)
@@ -255,6 +273,8 @@ def ecc_align(imgRef, imgTest, warpMode,
     https://github.com/khufkens/align_images/blob/master/align_images.py
     '''
 
+    print(f'{warpMode} warp mode used for ECC')
+
     # initialise warp matrix
     if warpMode == 'AFFINE':
         warpMatrix = np.eye(2, 3, dtype=np.float32)
@@ -270,8 +290,14 @@ def ecc_align(imgRef, imgTest, warpMode,
                 numIterations, terminationEps)
 
     # Run ECC algorithm to find optimal warp matrix
-    cc, warp_matrix = cv2.findTransformECC(imgRef, imgTest, warpMatrix,
-                                           cvWarpMode, criteria)
+    try:
+        cc, warp_matrix = cv2.findTransformECC(imgRef, imgTest, warpMatrix,
+                                               cvWarpMode, criteria)
+    except cv2.error:
+        print(('WARNING: ECC failed to converge - using identity matrix as '
+              'WarpMatrix'))
+        pass
+
 
     # apply the warp matrix to the test image
     sz = imgRef.shape
@@ -340,7 +366,9 @@ def feature_align(imgRef, imgTest,
     matches = matches[:keep]
     print(f'ORB num. matched used: {len(matches)}')
     if len(matches) < 4:
-        exit('Error: need more than 4 matched features to find homography matrix!')
+        pass
+        # print('WARNING: need more than 4 matched features to find homography '
+        #       'matrix!')
 
     # visualise the matched keypoints
     matchedVis = cv2.drawMatches(refGrey, kpsA, imgGrey, kpsB, matches, None)
@@ -356,14 +384,16 @@ def feature_align(imgRef, imgTest,
         ptsA[i] = kpsA[m.queryIdx].pt
         ptsB[i] = kpsB[m.trainIdx].pt
 
-    # compute the homography matrix between the matched points to transform
-    # b into a
-    H, mask = cv2.findHomography(ptsB, ptsA, method=cv2.RANSAC)
-
+    # compute the homography matrix (H) between the matched points.
     # use H to align the images (nb using the full resolution images, not the
     # downsampled ones used to find H)
     h, w = imgRef.shape[:2]
-    alignedImg = cv2.warpPerspective(imgTest, H, (w, h))
+    try:
+        H, mask = cv2.findHomography(ptsB, ptsA, method=cv2.RANSAC)
+        alignedImg = cv2.warpPerspective(imgTest, H, (w, h))
+    except cv2.error:
+        print('WARNING: ORB failed, just transforming with identity matrix')
+        alignedImg = cv2.warpPerspective(imgTest, np.eye(3), (w, h))
 
     out = {'alignedImg': alignedImg,
            'testImgFeatures': imgFeatures,
@@ -403,6 +433,18 @@ def make_light_inRange_mask(img):
     mask_sanity = cv2.bitwise_and(img, img, mask=inv_mask_b)
 
     return [inv_mask_b, mask_sanity]
+
+def hsv_set_to(bgr_img, lwr, upr, BGRSet):
+    '''
+    filter BGR image to get pixels between lwr, and upr in hsv color scheme
+    returns BGR image having set those pixel values to BGRSet values
+    '''
+
+    hsv = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, lwr, upr)
+    res = bgr_img.copy()
+    res[mask > 0] = BGRSet
+    return res
 
 def hsv_filter(bgr_img, lwr, upr):
     '''
