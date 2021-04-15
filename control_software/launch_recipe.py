@@ -1,4 +1,4 @@
-from logging_utils import convert_recipe_line, create_new_dir, save_data, request_env_data
+from logging_utils import convert_recipe_line, create_new_dir, save_data, request_env_data, read_env_data
 from serial_utils import open_serial
 from image_capture.lepton_utils import LeptonCamera, LeptonError
 from picamera import PiCamera
@@ -43,7 +43,8 @@ def run():
                         if (datetime.now() - ser_opened).total_seconds() < 2:
                             print("Preparing serial")
                             sleep(2-(datetime.now()-ser_opened).total_seconds())
-                        env_data = request_env_data(ser, data)
+                        request_env_data(ser, data)
+                        env_data = read_env_data(ser)
                         if data[1]:
                             sleep(0.5)  # Let the white lights turn on
                             logtime = datetime.now().strftime("%y-%m-%d-%H_%M_%S")

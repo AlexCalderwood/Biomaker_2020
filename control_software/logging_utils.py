@@ -126,10 +126,16 @@ def request_env_data(ser, request_data):
         else:
             ser.write(bytes([255]))  # Send alternative 1 byte
 
-    #print("Request sent at", datetime.datetime.now().strftime("%H:%M:%S"))
-    env_string = read_serial_data(ser)
-    #print("env_string:", env_string)
 
-    env_data = convert_env_string(env_string)
+def read_env_data(ser):
+    """Reads env_data from serial buffer and returns list of useful data"""
+    data_length = 32  # Expected number of bytes to be in buffer
+    env_bytes = ser.read(32)  # Timeout set when ser was initialised
+    env_data = []
+    if len(env_bytes) > 0:
+        env_data.append(env_bytes[:19].decode("utf-8"))  # Read time/datestamp
+        env_data += [None if b == 255 else b for b in env_bytes[19:]]
+    else:
+        env_data = [None] * 13
 
     return env_data
