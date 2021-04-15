@@ -25,22 +25,25 @@ for file in os.listdir(playingd):
 
     imgRef, imgTest = prep_images_for_align(origRef, origTest,
                                             filterGreen=True, sharpenIR=True)
-
+    print(imgRef.shape)
     show_pics([imgRef, imgTest])
 
     ### TODO:
     # this homography align works well with dummy, but not real IR images -
     # try some of the more constrained alignments at :!!!
     # https://learnopencv.com/image-alignment-ecc-in-opencv-c-python/
-    out = homography_align_images(imgRef, imgTest,
-                                  maxFeatures=3000, keepFraction=0.3,
-                                  DEBUG=True)
+    out = feature_align(imgRef, imgTest,
+                        maxFeatures=3000, keepFraction=0.3,
+                        DEBUG=True)
 
     refFeatures = out['refImgFeatures']
     imgFeatures = out['testImgFeatures']
     matchedVis = out['matchedFeatures']
     alignedImg = out['alignedImg']
 
+    out = ecc_align(imgRef, imgTest, 'HOMOGRAPHY')
+    eccImg = out['alignedImg']
+    #show_pics([imgRef, imgTest, eccImg])
 
     # make single image showing features found, and features matched:
     p_refFeatures, p_imgFeatures, p_matchedVis = pad_image_height([refFeatures,

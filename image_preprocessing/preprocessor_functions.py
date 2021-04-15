@@ -235,9 +235,61 @@ def prep_images_for_align(origRef, origTest, filterGreen=True, sharpenIR=True):
     return imgRef, imgTest
 
 
-def homography_align_images(imgRef, imgTest,
-                            maxFeatures=1000, keepFraction=0.2,
-                            DEBUG=True):
+def ecc_align(imgRef, imgTest, warpMode,
+              numIterations=5000,
+              terminationEps=1e-8):
+    '''
+    align imgTest to imgRef. these should be greyscale cv2 images, (i.e. 1
+    channel), which have been pre-prepeared for alignment already).
+
+    Will try to warp imgTest onto imgRef.
+
+    warpMode: "AFFINE" or "HOMOGRAPHY". Affine motion model, allows
+    translation, rotation, shear. Homography motion model also allows some 3d
+    effects (ie parallel lines in one aren't necessarily parallel in other).
+
+    numIterations: number of ECC iterations
+    terminationEps: ECC termination value
+
+    based on
+    https://github.com/khufkens/align_images/blob/master/align_images.py
+    '''
+
+    # initialise warp matrix
+    if warpMode == 'AFFINE':
+        warpMatrix = np.eye(2, 3, dtype=np.float32)
+        cvWarpMode = cv2.MOTION_AFFINE
+    elif warpMode == 'HOMOGRAPHY':
+        warpMatrix = np.eye(3, 3, dtype=np.float32)
+        cvWarpMode = cv2.MOTION_HOMOGRAPHY
+    else:
+        exit('warp_mode must be either "AFFINE" or "HOMOGRAPHY".')
+
+    # define termination criteria
+    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
+                numIterations, terminationEps)
+
+    # Run ECC algorithm to find optimal warp matrix
+    cc, warp_matrix = cv2.findTransformECC(imgRef, imgTest, warpMatrix,
+                                           cvWarpMode, criteria)
+
+    # apply the warp matrix to the test image
+    sz = imgRef.shape
+
+    if warpMode == 'AFFINE':
+        imgAligned = cv2.warpAffine(imgTest, warpMatrix, (sz[1], sz[0]),
+                                    flags=cv2.INTER_LINEAR +
+                                    cv2.WARP_INVERSE_MAP)
+    if warpMode == 'HOMOGRAPHY':
+        imgAligned = cv2.warpPerspective(imgTest, warpMatrix, (sz[1], sz[0]),
+                                         flags=cv2.INTER_LINEAR +
+                                         cv2.WARP_INVERSE_MAP)
+
+    return {'alignedImg': imgAligned}
+
+def feature_align(imgRef, imgTest,
+                  maxFeatures=1000, keepFraction=0.2,
+                  DEBUG=True):
 
     '''
     aligns imgTest to imgRef, following tutorial at :
@@ -266,8 +318,8 @@ def homography_align_images(imgRef, imgTest,
     # use ORB to detect keypoints and extract local invariant features
     print(f'ORB maxFeatures: {maxFeatures}')
     orb = cv2.ORB_create(maxFeatures)
-    (kpsA, descsA) = orb.detectAndCompute(refGrey, None)
-    (kpsB, descsB) = orb.detectAndCompute(imgGrey, None)
+    kpsA, descsA = orb.detectAndCompute(refGrey, None)
+    kpsB, descsB = orb.detectAndCompute(imgGrey, None)
 
     # show the features
     refFeatures = cv2.drawKeypoints(refGrey, kpsA, None, color=(0, 255, 0),
@@ -294,7 +346,7 @@ def homography_align_images(imgRef, imgTest,
     matchedVis = cv2.drawMatches(refGrey, kpsA, imgGrey, kpsB, matches, None)
 
     if DEBUG:
-        print('ln236)')
+        print('DEBUGGING!')
         show_pics([matchedVis])
     # record which keypoints map to each other
     ptsA = np.zeros((len(matches), 2), dtype='float')
@@ -306,11 +358,11 @@ def homography_align_images(imgRef, imgTest,
 
     # compute the homography matrix between the matched points to transform
     # b into a
-    (H, mask) = cv2.findHomography(ptsB, ptsA, method=cv2.RANSAC)
+    H, mask = cv2.findHomography(ptsB, ptsA, method=cv2.RANSAC)
 
     # use H to align the images (nb using the full resolution images, not the
     # downsampled ones used to find H)
-    (h, w) = imgRef.shape[:2]
+    h, w = imgRef.shape[:2]
     alignedImg = cv2.warpPerspective(imgTest, H, (w, h))
 
     out = {'alignedImg': alignedImg,
