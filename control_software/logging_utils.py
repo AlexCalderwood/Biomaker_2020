@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime
 import os
 from time import sleep
 from serial_utils import open_serial, generate_rpi_request, read_serial_data, convert_env_string
@@ -23,7 +23,7 @@ def convert_recipe_line(line):
         raise ValueError("Empty line parsed from recipe file")
 
     # List of conversion functions based on latest format
-    conv_funcs = [lambda datestr: datetime.datetime.strptime(datestr, "%Y-%m-%d %H:%M:%S"),
+    conv_funcs = [lambda datestr: datetime.strptime(datestr, "%Y-%m-%d %H:%M:%S"),
                   bool,
                   int,
                   int,
@@ -94,7 +94,7 @@ def format_data_string(env_data):
     data_string = ""
 
     if not (env_data[0] is None):
-        data_string += datetime.datetime.strftime(env_data[0], "%Y-%m-%d %H:%M:%S")
+        data_string += datetime.strftime(env_data[0], "%Y-%m-%d %H:%M:%S")
     for i in range(7, len(env_data)-2):  # Record only time-of-request, and 8-12 inclusive
         data_string += ", "
         if not(env_data[i] is None):
@@ -115,10 +115,8 @@ def request_env_data(ser, request_data):
     else:
         formatted_data.append(0)  # Turn white light intensity to 0
         formatted_data.append(0)  # No light timeout needed
-    print(formatted_data)
 
     # Send data
-    print("Request:", formatted_data[0].encode("utf-8"), bytes(formatted_data[1:]))
     ser.write(formatted_data[0].encode("utf-8"))  # Send string request
     for element in formatted_data[1:]:
         if not (element is None):
@@ -133,7 +131,7 @@ def read_env_data(ser):
     env_bytes = ser.read(32)  # Timeout set when ser was initialised
     env_data = []
     if len(env_bytes) > 0:
-        env_data.append(env_bytes[:19].decode("utf-8"))  # Read time/datestamp
+        env_data.append(datetime.strptime(env_bytes[:19].decode("utf-8"), "%Y-%m-%d %H:%M:%S"))  # Read time/datestamp
         env_data += [None if b == 255 else b for b in env_bytes[19:]]
     else:
         env_data = [None] * 13
