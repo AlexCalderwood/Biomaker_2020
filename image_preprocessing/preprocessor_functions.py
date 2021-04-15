@@ -78,29 +78,340 @@ def get_image_order(imgDict):
     return sorted_files
 
 
-def show_pics(images):
+def show_pics(images, origRes=False):
     """
     quick testing function to show the state of images.
     shows all pictures. Closes and continues on keystroke.
     images : list of openCV image objects
+
+    if orig_res = True, then dosn't resize for convenient viewing
     """
 
     width = 800
     for i, img in enumerate(images):
         tmp = img.copy()
-        w = tmp.shape[1]
-        h = tmp.shape[0]
-        aspect = w / h
 
-        height = int(width / aspect)
+        if not origRes:
+            w = tmp.shape[1]
+            h = tmp.shape[0]
+            aspect = w / h
 
-        tmp = cv2.resize(tmp, (width, height))  # rescale to 200 x 200 px
+            height = int(width / aspect)
+
+            tmp = cv2.resize(tmp, (width, height))  # rescale to 800 x height px
+
         cv2.imshow('image_'+str(i), tmp)
         cv2.waitKey(0)
 
         cv2.destroyAllWindows()
 
     return
+
+
+def make_overlay(reference, comparison):
+    '''
+    overlay reference image with comparison image
+    '''
+    overlay = cv2.addWeighted(reference, 0.3, comparison, 0.7, 0)
+    return overlay
+
+
+def make_false_color_overlay(reference, comparison):
+    '''
+    overlay reference image with comparison image.
+    will be red where comparison is too dark, cyan where it's too light,
+    and grayscale where they align properly
+    '''
+
+    # convert both to greyscale, then get the greyscale as the colour channels
+    # of an BGR image
+    if len(reference.shape) > 2:
+        tmp_imgRef = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
+    else:
+        tmp_imgRef = reference
+    tmp_imgRef = cv2.merge((tmp_imgRef, tmp_imgRef, tmp_imgRef))
+
+    if (len(comparison.shape) > 2):
+        tmp_alignedImg = cv2.cvtColor(comparison, cv2.COLOR_BGR2GRAY)
+    else:
+        tmp_alignedImg = comparison
+    tmp_alignedImg = cv2.merge((tmp_alignedImg,
+                                tmp_alignedImg,
+                                tmp_alignedImg))
+
+    # just overlay the channels of interest
+    tmp_imgRef[:, :, 0:2] = 255  # max out B,G channels
+    tmp_alignedImg[:, :, 2] = 255  # max out R channel
+    overlay = cv2.addWeighted(tmp_imgRef, 0.5, tmp_alignedImg, 0.5, 0)
+
+    return overlay
+
+
+def to_same_resolution(referenceImg, testImg):
+    '''
+    resize testImg to the same resolution as referenceImg
+    returns the resized testImg
+    '''
+
+    heightRatio = referenceImg.shape[0] / testImg.shape[0]
+    widthRatio = referenceImg.shape[1] / testImg.shape[1]
+
+    newWidth = int(testImg.shape[1] * widthRatio)
+    newHeight = int(testImg.shape[0] * heightRatio)
+
+    imgOut = cv2.resize(testImg, (newWidth, newHeight))
+    return imgOut
+
+
+def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
+    """Return a sharpened version of the image, using an unsharp mask.
+    https://stackoverflow.com/questions/4993082/how-can-i-sharpen-an-image-in-opencv
+    """
+    blurred = cv2.GaussianBlur(image, kernel_size, sigma)
+    sharpened = float(amount + 1) * image - float(amount) * blurred
+    sharpened = np.maximum(sharpened, np.zeros(sharpened.shape))
+    sharpened = np.minimum(sharpened, 255 * np.ones(sharpened.shape))
+    sharpened = sharpened.round().astype(np.uint8)
+    if threshold > 0:
+        low_contrast_mask = np.absolute(image - blurred) < threshold
+        np.copyto(sharpened, image, where=low_contrast_mask)
+    return sharpened
+
+
+def downsample_resolution(origRef, origTest):
+    '''
+    downsample higher resolution image to similar resolution as other
+    '''
+
+    if (origRef[:, :, 0].size > origTest[:, :, 0].size):
+        bigShape = origRef.shape  # record the larger image dimensions so can
+                                  # resize the aligned image.
+        imgRef = to_same_resolution(origTest, origRef)
+        imgTest = origTest.copy()
+    elif (origTest[:, :, 0].size > origRef[:, :, 0].size):
+        bigShape = origTest.shape
+        imgTest = to_same_resolution(origRef, origTest)
+        imgRef = origRef.copy()
+    else:
+        imgTest = origTest.copy()
+        imgRef = origRef.copy()
+
+    return imgRef, imgTest
+
+
+def prep_images_for_align(origRef, origTest,
+                          filterGreen=True, highlightGreen=True,
+                          sharpenIR=True):
+
+    '''Bundles all the transformations to apply to BGR (origRef), and IR (origTest)
+    images to prepare them for alignment/registration.
+
+    imgRef and imgTest are cv2 images. Expect both to be 3 channel images,
+    even if greyscale. imgRef should be high res BGR image. imgTest should be
+    low res IR image.
+
+    filterGreen: bool. If true, will filter origRef to only retain green pixels
+    prior to registration. Really helps when aligning green plants!
+    sharpenIR: bool. If true, will sharpen origTest prior to alignment
+    '''
+
+    # if try the other way around ("upsample"), ORB matching points are
+    # completely wrong).
+    imgRef, imgTest = downsample_resolution(origRef.copy(), origTest.copy())
+
+
+    if highlightGreen:
+        print('highlighting BGR to make green real bright...')
+        greenLwr = np.array([30, 80, 50])
+        greenUpr = np.array([50, 255, 200])
+        highlight = (255, 255, 255)
+        imgRef = hsv_set_to(imgRef, greenLwr, greenUpr, highlight)
+
+    # filter BGR image to only keep the plants, (to be beneficial, assumes
+    # plants are lighter than background in the IR image)
+    if filterGreen:
+        print('filtering BGR to only keep green...')
+        # hsv format green colour range
+        # h(ue) 0 -> 180
+        # s(sturation) 0 -> 255
+        # v(alue) 0 -> 255
+        greenLwr = np.array([20, 80, 0])
+        greenUpr = np.array([50, 255, 200])
+        imgRef = hsv_filter(imgRef, greenLwr, greenUpr)
+
+    if sharpenIR:
+        print('sharpening IR...')
+        imgSharp = unsharp_mask(imgTest, kernel_size=(5, 5), sigma=1.0,
+                                amount=1.0, threshold=0)
+        # show_pics([imgTest, imgSharp])
+        imgTest = imgSharp
+
+    # convert both to black and white
+    imgRef= cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
+    imgTest= cv2.cvtColor(imgTest, cv2.COLOR_BGR2GRAY)
+
+    return imgRef, imgTest
+
+
+def ecc_align(imgRef, imgTest, warpMode,
+              numIterations=5000,
+              terminationEps=1e-8):
+    '''
+    align imgTest to imgRef. these should be greyscale cv2 images, (i.e. 1
+    channel), which have been pre-prepeared for alignment already).
+
+    Will try to warp imgTest onto imgRef.
+
+    warpMode: "AFFINE" or "HOMOGRAPHY". Affine motion model, allows
+    translation, rotation, shear. Homography motion model also allows some 3d
+    effects (ie parallel lines in one aren't necessarily parallel in other).
+
+    numIterations: number of ECC iterations
+    terminationEps: ECC termination value
+
+    based on
+    https://github.com/khufkens/align_images/blob/master/align_images.py
+    '''
+
+    print(f'{warpMode} warp mode used for ECC')
+
+    # initialise warp matrix
+    if warpMode == 'AFFINE':
+        warpMatrix = np.eye(2, 3, dtype=np.float32)
+        cvWarpMode = cv2.MOTION_AFFINE
+    elif warpMode == 'HOMOGRAPHY':
+        warpMatrix = np.eye(3, 3, dtype=np.float32)
+        cvWarpMode = cv2.MOTION_HOMOGRAPHY
+    else:
+        exit('warp_mode must be either "AFFINE" or "HOMOGRAPHY".')
+
+    # define termination criteria
+    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT,
+                numIterations, terminationEps)
+
+    # Run ECC algorithm to find optimal warp matrix
+    try:
+        cc, warp_matrix = cv2.findTransformECC(imgRef, imgTest, warpMatrix,
+                                               cvWarpMode, criteria)
+    except cv2.error:
+        print(('WARNING: ECC failed to converge - using identity matrix as '
+              'WarpMatrix'))
+        pass
+
+
+    # apply the warp matrix to the test image
+    sz = imgRef.shape
+
+    if warpMode == 'AFFINE':
+        imgAligned = cv2.warpAffine(imgTest, warpMatrix, (sz[1], sz[0]),
+                                    flags=cv2.INTER_LINEAR +
+                                    cv2.WARP_INVERSE_MAP)
+    if warpMode == 'HOMOGRAPHY':
+        imgAligned = cv2.warpPerspective(imgTest, warpMatrix, (sz[1], sz[0]),
+                                         flags=cv2.INTER_LINEAR +
+                                         cv2.WARP_INVERSE_MAP)
+
+    return {'alignedImg': imgAligned}
+
+def feature_align(imgRef, imgTest,
+                  maxFeatures=1000, keepFraction=0.2,
+                  DEBUG=True):
+
+    '''
+    aligns imgTest to imgRef, following tutorial at :
+    https://www.pyimagesearch.com/2020/08/31/image-alignment-and-registration-with-opencv/
+
+    assumes homography motion model, i.e. allows some 3d movement effects
+
+    imgRef and imgTest are cv2 images. Expect both to be 3 channel images,
+    even if greyscale. imgRef should be BGR image. imgTest should be IR image.
+    maxFeatures: is the number of features to be identified for mapping
+    keepFraction: is the proportion of the found features to be equated in the
+    images.
+
+    returns dict of
+    {
+    'alignedImg': alignedImg // imgTest after alignment to imgRef
+    'testImgFeatures': imgFeatures // all the features found in imgTest
+    'refImgFeatures': refFeatures // all the features found in imgRef
+    'matchedFeatures': matchedVis // the equivalent features in both images
+    }
+    '''
+
+    refGrey = imgRef
+    imgGrey = imgTest
+
+    # use ORB to detect keypoints and extract local invariant features
+    print(f'ORB maxFeatures: {maxFeatures}')
+    orb = cv2.ORB_create(maxFeatures)
+    kpsA, descsA = orb.detectAndCompute(refGrey, None)
+    kpsB, descsB = orb.detectAndCompute(imgGrey, None)
+
+    # show the features
+    refFeatures = cv2.drawKeypoints(refGrey, kpsA, None, color=(0, 255, 0),
+                                    flags=0)
+    imgFeatures = cv2.drawKeypoints(imgGrey, kpsB, None, color=(0, 255, 0),
+                                    flags=0)
+
+    # match the features
+    # method = cv2.DESCRIPTOR_MATCHER_BRUTEFORCE_HAMMING
+    # matcher = cv2.DescriptorMatcher_create(method)
+    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
+    matches = matcher.match(descsA, descsB, None)
+
+    # sort matches by their distance (smaller is more similar)
+    matches = sorted(matches, key=lambda x: x.distance)
+    # keep only the top matches
+    keep = int(len(matches) * keepFraction)
+    matches = matches[:keep]
+    print(f'ORB num. matched used: {len(matches)}')
+    if len(matches) < 4:
+        pass
+        # print('WARNING: need more than 4 matched features to find homography '
+        #       'matrix!')
+
+    # visualise the matched keypoints
+    matchedVis = cv2.drawMatches(refGrey, kpsA, imgGrey, kpsB, matches, None)
+
+    if DEBUG:
+        print('DEBUGGING!')
+        show_pics([matchedVis])
+    # record which keypoints map to each other
+    ptsA = np.zeros((len(matches), 2), dtype='float')
+    ptsB = np.zeros((len(matches), 2), dtype='float')
+
+    for (i, m) in enumerate(matches):
+        ptsA[i] = kpsA[m.queryIdx].pt
+        ptsB[i] = kpsB[m.trainIdx].pt
+
+    # compute the homography matrix (H) between the matched points.
+    # use H to align the images (nb using the full resolution images, not the
+    # downsampled ones used to find H)
+    h, w = imgRef.shape[:2]
+    try:
+        H, mask = cv2.findHomography(ptsB, ptsA, method=cv2.RANSAC)
+        alignedImg = cv2.warpPerspective(imgTest, H, (w, h))
+    except cv2.error:
+        print('WARNING: ORB failed, just transforming with identity matrix')
+        alignedImg = cv2.warpPerspective(imgTest, np.eye(3), (w, h))
+
+    out = {'alignedImg': alignedImg,
+           'testImgFeatures': imgFeatures,
+           'refImgFeatures': refFeatures,
+           'matchedFeatures': matchedVis}
+
+    return out
+
+
+def pad_image_height(imageList):
+    '''pad images in imageList from the top to be the same height'''
+
+    mx_ht = max([img.shape[0] for img in imageList])
+
+    outList = [cv2.copyMakeBorder(img, mx_ht - img.shape[0],
+                                  0, 0, 0, cv2.BORDER_CONSTANT,
+                                  value=[0, 0, 0]) for img in imageList]
+    return outList
 
 
 def make_light_inRange_mask(img):
@@ -122,6 +433,28 @@ def make_light_inRange_mask(img):
     mask_sanity = cv2.bitwise_and(img, img, mask=inv_mask_b)
 
     return [inv_mask_b, mask_sanity]
+
+def hsv_set_to(bgr_img, lwr, upr, BGRSet):
+    '''
+    filter BGR image to get pixels between lwr, and upr in hsv color scheme
+    returns BGR image having set those pixel values to BGRSet values
+    '''
+
+    hsv = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, lwr, upr)
+    res = bgr_img.copy()
+    res[mask > 0] = BGRSet
+    return res
+
+def hsv_filter(bgr_img, lwr, upr):
+    '''
+    filter BGR image to get pixels between lwr, and upr in hsv color scheme
+    returns BGR image after filtering, only keeping those pixels
+    '''
+    hsv = cv2.cvtColor(bgr_img, cv2.COLOR_BGR2HSV)
+    mask = cv2.inRange(hsv, lwr, upr)
+    res = cv2.bitwise_and(bgr_img, bgr_img, mask=mask)
+    return res
 
 
 def make_green_inRange_mask(img):
