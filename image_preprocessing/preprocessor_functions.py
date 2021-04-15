@@ -78,23 +78,28 @@ def get_image_order(imgDict):
     return sorted_files
 
 
-def show_pics(images):
+def show_pics(images, origRes=False):
     """
     quick testing function to show the state of images.
     shows all pictures. Closes and continues on keystroke.
     images : list of openCV image objects
+
+    if orig_res = True, then dosn't resize for convenient viewing
     """
 
     width = 800
     for i, img in enumerate(images):
         tmp = img.copy()
-        w = tmp.shape[1]
-        h = tmp.shape[0]
-        aspect = w / h
 
-        height = int(width / aspect)
+        if not origRes:
+            w = tmp.shape[1]
+            h = tmp.shape[0]
+            aspect = w / h
 
-        tmp = cv2.resize(tmp, (width, height))  # rescale to 200 x 200 px
+            height = int(width / aspect)
+
+            tmp = cv2.resize(tmp, (width, height))  # rescale to 800 x height px
+
         cv2.imshow('image_'+str(i), tmp)
         cv2.waitKey(0)
 
@@ -105,21 +110,30 @@ def show_pics(images):
 
 def make_overlay(reference, comparison):
     '''
-    overlay refernce with comparison image.
+    overlay reference image with comparison image.
     will be red where comparison is too dark, cyan where it's too light,
     and grayscale where they align properly
     '''
 
     # convert both to greyscale, then get the greyscale as the colour channels
     # of an BGR image
-    tmp_imgRef = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
+    if len(reference.shape) > 2:
+        tmp_imgRef = cv2.cvtColor(reference, cv2.COLOR_BGR2GRAY)
+    else:
+        tmp_imgRef = reference
     tmp_imgRef = cv2.merge((tmp_imgRef, tmp_imgRef, tmp_imgRef))
-    tmp_alignedImg = cv2.cvtColor(comparison, cv2.COLOR_BGR2GRAY)
-    tmp_alignedImg = cv2.merge((tmp_alignedImg, tmp_alignedImg, tmp_alignedImg))
+
+    if (len(comparison.shape) > 2):
+        tmp_alignedImg = cv2.cvtColor(comparison, cv2.COLOR_BGR2GRAY)
+    else:
+        tmp_alignedImg = comparison
+    tmp_alignedImg = cv2.merge((tmp_alignedImg,
+                                tmp_alignedImg,
+                                tmp_alignedImg))
 
     # just overlay the channels of interest
-    tmp_imgRef[:, :, 0:2] = 255 # max out B,G channels
-    tmp_alignedImg[:, :, 2] = 255 # max out R channel
+    tmp_imgRef[:, :, 0:2] = 255  # max out B,G channels
+    tmp_alignedImg[:, :, 2] = 255  # max out R channel
     overlay = cv2.addWeighted(tmp_imgRef, 0.5, tmp_alignedImg, 0.5, 0)
 
     return overlay
@@ -156,54 +170,47 @@ def unsharp_mask(image, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0):
     return sharpened
 
 
-def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
-                 filterGreen=True, sharpenIR = True,
-                 DEBUG=True):
-
+def downsample_resolution(origRef, origTest):
     '''
-    aligns imgTest to imgRef, following tutorial at :
-    https://www.pyimagesearch.com/2020/08/31/image-alignment-and-registration-with-opencv/
-
-    imgRef and imgTest are cv2 images. Expect both to be 3 channel images,
-    even if greyscale. imgRef should be high res BGR image. imgTest should be
-    low res IR image.
-    maxFeatures: is the number of features to be identified for mapping
-    keepFraction: is the proportion of the found features to be equated in the
-    images.
-    filterGreen: bool. If true, will filter origRef to only retain green pixels
-    prior to registration. Really helps when aligning green plants!
-    sharpenIR: bool. If true, will sharpen origTest prior to alignment
-
-    returns dict of
-    {
-    'alignedImg': alignedImg // imgTest after alignment to imgRef
-    'testImgFeatures': imgFeatures // all the features found in imgTest
-    'refImgFeatures': refFeatures // all the features found in imgRef
-    'matchedFeatures': matchedVis // the equivalent features in both images
-    }
+    downsample higher resolution image to similar resolution as other
     '''
 
-    # if images to be aligned are different resolution, then
-    # downsample higher resolution one to similar resolution as other
-    # (if try the other way aroung, ORB matching points are completely wrong).
     if (origRef[:, :, 0].size > origTest[:, :, 0].size):
         bigShape = origRef.shape  # record the larger image dimensions so can
                                   # resize the aligned image.
         imgRef = to_same_resolution(origTest, origRef)
         imgTest = origTest.copy()
-    elif (origTest[:,:,0].size > origRef[:, :, 0].size):
+    elif (origTest[:, :, 0].size > origRef[:, :, 0].size):
         bigShape = origTest.shape
         imgTest = to_same_resolution(origRef, origTest)
         imgRef = origRef.copy()
     else:
-        bigShape = origRef.shape
         imgTest = origTest.copy()
         imgRef = origRef.copy()
 
+    return imgRef, imgTest
 
-    # if aligning BRG image to IR image, then to get equivalent features,
-    # need to filter BGR image to only keep the plants, (assumes plants are
-    # lighter than background in the IR image)
+
+def prep_images_for_align(origRef, origTest, filterGreen=True, sharpenIR=True):
+
+    '''Bundles all the transformations to apply to BGR (origRef), and IR (origTest)
+    images to prepare them for alignment/registration.
+
+    imgRef and imgTest are cv2 images. Expect both to be 3 channel images,
+    even if greyscale. imgRef should be high res BGR image. imgTest should be
+    low res IR image.
+
+    filterGreen: bool. If true, will filter origRef to only retain green pixels
+    prior to registration. Really helps when aligning green plants!
+    sharpenIR: bool. If true, will sharpen origTest prior to alignment
+    '''
+
+    # if try the other way around ("upsample"), ORB matching points are
+    # completely wrong).
+    imgRef, imgTest = downsample_resolution(origRef.copy(), origTest.copy())
+
+    # filter BGR image to only keep the plants, (to be beneficial, assumes
+    # plants are lighter than background in the IR image)
     if filterGreen:
         print('filtering BGR to only keep green...')
         # hsv format green colour range
@@ -216,17 +223,45 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
 
     if sharpenIR:
         print('sharpening IR...')
-        imgSharp = unsharp_mask(imgTest, kernel_size=(5, 5), sigma=1.0, amount=1.0, threshold=0)
-        show_pics([imgTest, imgSharp])
+        imgSharp = unsharp_mask(imgTest, kernel_size=(5, 5), sigma=1.0,
+                                amount=1.0, threshold=0)
+        # show_pics([imgTest, imgSharp])
         imgTest = imgSharp
 
     # convert both to black and white
-    refGrey = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
-    imgGrey = cv2.cvtColor(imgTest, cv2.COLOR_BGR2GRAY)
+    imgRef= cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
+    imgTest= cv2.cvtColor(imgTest, cv2.COLOR_BGR2GRAY)
 
-    if DEBUG:
-        print('ln206')
-        show_pics([refGrey])
+    return imgRef, imgTest
+
+
+def homography_align_images(imgRef, imgTest,
+                            maxFeatures=1000, keepFraction=0.2,
+                            DEBUG=True):
+
+    '''
+    aligns imgTest to imgRef, following tutorial at :
+    https://www.pyimagesearch.com/2020/08/31/image-alignment-and-registration-with-opencv/
+
+    assumes homography motion model, i.e. allows some 3d movement effects
+
+    imgRef and imgTest are cv2 images. Expect both to be 3 channel images,
+    even if greyscale. imgRef should be BGR image. imgTest should be IR image.
+    maxFeatures: is the number of features to be identified for mapping
+    keepFraction: is the proportion of the found features to be equated in the
+    images.
+
+    returns dict of
+    {
+    'alignedImg': alignedImg // imgTest after alignment to imgRef
+    'testImgFeatures': imgFeatures // all the features found in imgTest
+    'refImgFeatures': refFeatures // all the features found in imgRef
+    'matchedFeatures': matchedVis // the equivalent features in both images
+    }
+    '''
+
+    refGrey = imgRef
+    imgGrey = imgTest
 
     # use ORB to detect keypoints and extract local invariant features
     print(f'ORB maxFeatures: {maxFeatures}')
@@ -278,10 +313,7 @@ def align_images(origRef, origTest, maxFeatures=1000, keepFraction=0.2,
     (h, w) = imgRef.shape[:2]
     alignedImg = cv2.warpPerspective(imgTest, H, (w, h))
 
-    # resize the (small) aligned image up to the reference image size
-    alignedImgBig = cv2.resize(alignedImg, (bigShape[1], bigShape[0]))
-
-    out = {'alignedImg': alignedImgBig,
+    out = {'alignedImg': alignedImg,
            'testImgFeatures': imgFeatures,
            'refImgFeatures': refFeatures,
            'matchedFeatures': matchedVis}

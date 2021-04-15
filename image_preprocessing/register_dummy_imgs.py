@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 from preprocessor_functions import *
 
 ### transform the dummy IR images generated back!
@@ -17,48 +18,51 @@ for file in os.listdir(playingd):
     RGBPath = playingd + file
     IRPath = playingd + 'IR' + fileRoot + 'png'
 
-    imgRef = cv2.imread(RGBPath)
-    imgTest = cv2.imread(IRPath)
+    origRef = cv2.imread(RGBPath)
+    origTest = cv2.imread(IRPath)
 
     outstr = file[3:]
-    align_to = 'IR' # string flag for how align_images should treat alignment.
-                    # "IR" if aligning to IR like image.
 
-    # align_images expects 3-channel images, and are needed for overlay
-    if len(imgTest.shape) == 2:
-        imgTest = cv2.merge((imgTest, imgTest, imgTest))
+    imgRef, imgTest = prep_images_for_align(origRef, origTest,
+                                            filterGreen=True, sharpenIR=True)
 
-    out = align_images(imgRef, imgTest, maxFeatures=3000, keepFraction=0.3,
-                       filterGreen=True, DEBUG=True)
+    show_pics([imgRef, imgTest])
+
+    ### TODO:
+    # this homography align works well with dummy, but not real IR images -
+    # try some of the more constrained alignments at :!!!
+    # https://learnopencv.com/image-alignment-ecc-in-opencv-c-python/
+    out = homography_align_images(imgRef, imgTest,
+                                  maxFeatures=3000, keepFraction=0.3,
+                                  DEBUG=True)
 
     refFeatures = out['refImgFeatures']
     imgFeatures = out['testImgFeatures']
     matchedVis = out['matchedFeatures']
     alignedImg = out['alignedImg']
 
-    # pad heights so can show in one window
-    # intermediate images of feature points aligned
+
+    # make single image showing features found, and features matched:
     p_refFeatures, p_imgFeatures, p_matchedVis = pad_image_height([refFeatures,
                                                                    imgFeatures,
                                                                    matchedVis])
     mappingPic = np.hstack((p_refFeatures, p_imgFeatures, p_matchedVis))
     cv2.imwrite(f'{playingd}/{outstr}_mapping.JPG',mappingPic)
 
-
-    # make nice output image to compare inputs, output, aligned image, and the
-    # overlay of input and aligned
-    # resize small test image to same size as high resolution one
-    bigImgTest = to_same_resolution(imgRef, imgTest)
-
+    # make image showing input, output, and overlay images:
+    # resize the (small) aligned image up to the reference image size
+    alignedImg = cv2.resize(alignedImg, (origRef.shape[1], origRef.shape[0]))
+    # combine to 3 channel, so can concatenate with BGR images
+    alignedImg = cv2.merge((alignedImg, alignedImg, alignedImg))
+    # resize small IR image to same size as high resolution one
+    bigImgTest = to_same_resolution(origRef, origTest)
     # make overlay of refernce and aligned image
-    overlay = make_overlay(imgRef, alignedImg)
-
+    overlay = make_overlay(origRef, alignedImg)
     # pad the heights
-    p_imgRef, p_imgTest, p_alignedImg, p_overlay = pad_image_height([imgRef,
+    p_imgRef, p_imgTest, p_alignedImg, p_overlay = pad_image_height([origRef,
                                                           bigImgTest,
                                                           alignedImg,
                                                           overlay])
-
     # combine all the images & and write to file
     outPic = np.hstack((p_imgRef, p_imgTest, p_alignedImg, p_overlay))
     cv2.imwrite(f'{playingd}/{outstr}_in_out.JPG', outPic)
