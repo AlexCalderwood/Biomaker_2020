@@ -12,6 +12,7 @@ for file in ['RGB5_2021-04-08T11-09-51_cropped.jpg']: #os.listdir(playingd):
         continue
 
     fileRoot = file[3:-3]
+    outstr = file[3:]
 
     # load the RGB, and IR images
     RGBPath = playingd + file
@@ -19,13 +20,13 @@ for file in ['RGB5_2021-04-08T11-09-51_cropped.jpg']: #os.listdir(playingd):
 
     origRef = cv2.imread(RGBPath)
     origTest = cv2.imread(IRPath)
-    outstr = file[3:]
 
     # prep images for alignment: get same resolution, filter for green,
     # sharpenIR up etc
     imgRef, imgTest = prep_images_for_align(origRef, origTest,
                                             filterGreen=False,
                                             highlightGreen=True,
+                                            edgeHighlight=True,
                                             sharpenIR=False)
 
     p_imgRef, p_imgTest = pad_image_height([imgRef, imgTest])
@@ -33,7 +34,7 @@ for file in ['RGB5_2021-04-08T11-09-51_cropped.jpg']: #os.listdir(playingd):
     cv2.imwrite(f'{playingd}/{outstr}_alignment_prepped.JPG', outPic)
 
     # ORB algorithm for feature alignment
-    out = feature_align(imgRef, imgTest,
+    out = feature_align(imgRef, imgTest, origTest,
                         maxFeatures=3000, keepFraction=0.3,
                         DEBUG=False)
 
@@ -43,9 +44,13 @@ for file in ['RGB5_2021-04-08T11-09-51_cropped.jpg']: #os.listdir(playingd):
     alignedImg = out['alignedImg']
 
     # ECC algorithm for alignment
-    out = ecc_align(imgRef, imgTest, 'HOMOGRAPHY') # ' AFFINE' or 'HOMOGRAPHY')
+    print(imgTest.shape)
+    print(origTest.shape)
+
+    out = ecc_align(imgRef, imgTest, origTest,
+                     'AFFINE') # ' AFFINE' or 'HOMOGRAPHY')
     eccImg = out['alignedImg']
-    # show_pics([imgRef, imgTest, eccImg])
+    #show_pics([imgRef, imgTest, eccImg])
 
 
     # Make combined output images

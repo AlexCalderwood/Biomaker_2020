@@ -201,6 +201,7 @@ def downsample_resolution(origRef, origTest):
 
 def prep_images_for_align(origRef, origTest,
                           filterGreen=True, highlightGreen=True,
+                          edgeHighlight=True,
                           sharpenIR=True):
 
     '''Bundles all the transformations to apply to BGR (origRef), and IR (origTest)
@@ -215,20 +216,27 @@ def prep_images_for_align(origRef, origTest,
     sharpenIR: bool. If true, will sharpen origTest prior to alignment
     '''
 
+    # downsample higher res img to low res one
     # if try the other way around ("upsample"), ORB matching points are
-    # completely wrong).
+    # completely wrong).
     imgRef, imgTest = downsample_resolution(origRef.copy(), origTest.copy())
 
+    if sharpenIR:
+        print('sharpening IR...')
+        imgSharp = unsharp_mask(imgTest, kernel_size=(5, 5), sigma=1.0,
+                                amount=1.0, threshold=0)
+        # show_pics([imgTest, imgSharp])
+        imgTest = imgSharp
 
     if highlightGreen:
         print('highlighting BGR to make green real bright...')
         greenLwr = np.array([30, 80, 50])
         greenUpr = np.array([50, 255, 200])
-        highlight = (255, 255, 255)
+        highlight = (200, 200, 200)
         imgRef = hsv_set_to(imgRef, greenLwr, greenUpr, highlight)
 
     # filter BGR image to only keep the plants, (to be beneficial, assumes
-    # plants are lighter than background in the IR image)
+    # plants are lighter than background in the IR image)
     if filterGreen:
         print('filtering BGR to only keep green...')
         # hsv format green colour range
@@ -239,28 +247,46 @@ def prep_images_for_align(origRef, origTest,
         greenUpr = np.array([50, 255, 200])
         imgRef = hsv_filter(imgRef, greenLwr, greenUpr)
 
-    if sharpenIR:
-        print('sharpening IR...')
-        imgSharp = unsharp_mask(imgTest, kernel_size=(5, 5), sigma=1.0,
-                                amount=1.0, threshold=0)
-        # show_pics([imgTest, imgSharp])
-        imgTest = imgSharp
+    # convert both to greyscale
+    imgRef = cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
+    imgTest = cv2.cvtColor(imgTest, cv2.COLOR_BGR2GRAY)
 
-    # convert both to black and white
-    imgRef= cv2.cvtColor(imgRef, cv2.COLOR_BGR2GRAY)
-    imgTest= cv2.cvtColor(imgTest, cv2.COLOR_BGR2GRAY)
+
+    if edgeHighlight:
+        # edge detection in both images
+        # Otsu's method for automatic thresholding image
+        upr, _ = cv2.threshold(imgRef, 0, 255,
+                               cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        lwr = 0.75 * upr
+        edgesRef = cv2.Canny(imgRef, lwr, upr)
+        imgRef[edgesRef > 0] = 255
+        #imgRef = edgesRef
+
+        upr, _ = cv2.threshold(imgTest, 0, 255,
+                               cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        lwr = 0.5 * upr
+        edgesTest = cv2.Canny(imgTest, lwr, upr)
+        imgTest[edgesTest > 0] = 255
+        #imgTest = edgesTest
+
+    # get rid of everything not green or edge in BGR img
+    # imgRef[imgRef < 255] = 0
 
     return imgRef, imgTest
 
 
-def ecc_align(imgRef, imgTest, warpMode,
+def ecc_align(imgRef, imgTest, origIR,
+              warpMode,
               numIterations=5000,
               terminationEps=1e-8):
     '''
     align imgTest to imgRef. these should be greyscale cv2 images, (i.e. 1
-    channel), which have been pre-prepeared for alignment already).
+    channel), which have been pre-prepeared for alignment already by
+    prep_images_for_align() ). These will be used to find the transformation
+    matrix H. (Will try to warp imgTest onto imgRef.)
 
-    Will try to warp imgTest onto imgRef.
+    origIR is the original (unprepared) IR image. This will be transformed by
+    H to give the aligned image.
 
     warpMode: "AFFINE" or "HOMOGRAPHY". Affine motion model, allows
     translation, rotation, shear. Homography motion model also allows some 3d
@@ -298,22 +324,21 @@ def ecc_align(imgRef, imgTest, warpMode,
               'WarpMatrix'))
         pass
 
-
     # apply the warp matrix to the test image
+    toAlign = cv2.cvtColor(origIR, cv2.COLOR_BGR2GRAY)
     sz = imgRef.shape
-
     if warpMode == 'AFFINE':
-        imgAligned = cv2.warpAffine(imgTest, warpMatrix, (sz[1], sz[0]),
+        imgAligned = cv2.warpAffine(toAlign, warpMatrix, (sz[1], sz[0]),
                                     flags=cv2.INTER_LINEAR +
                                     cv2.WARP_INVERSE_MAP)
     if warpMode == 'HOMOGRAPHY':
-        imgAligned = cv2.warpPerspective(imgTest, warpMatrix, (sz[1], sz[0]),
+        imgAligned = cv2.warpPerspective(toAlign, warpMatrix, (sz[1], sz[0]),
                                          flags=cv2.INTER_LINEAR +
                                          cv2.WARP_INVERSE_MAP)
 
     return {'alignedImg': imgAligned}
 
-def feature_align(imgRef, imgTest,
+def feature_align(imgRef, imgTest, origIR,
                   maxFeatures=1000, keepFraction=0.2,
                   DEBUG=True):
 
@@ -390,10 +415,12 @@ def feature_align(imgRef, imgTest,
     h, w = imgRef.shape[:2]
     try:
         H, mask = cv2.findHomography(ptsB, ptsA, method=cv2.RANSAC)
-        alignedImg = cv2.warpPerspective(imgTest, H, (w, h))
+        toAlign = cv2.cvtColor(origIR, cv2.COLOR_BGR2GRAY)  # needs 1 channel
+        alignedImg = cv2.warpPerspective(toAlign, H, (w, h))
     except cv2.error:
         print('WARNING: ORB failed, just transforming with identity matrix')
-        alignedImg = cv2.warpPerspective(imgTest, np.eye(3), (w, h))
+        toAlign = cv2.cvtColor(origIR, cv2.COLOR_BGR2GRAY)  # needs 1 channel
+        alignedImg = cv2.warpPerspective(toAlign, np.eye(3), (w, h))
 
     out = {'alignedImg': alignedImg,
            'testImgFeatures': imgFeatures,
@@ -434,6 +461,7 @@ def make_light_inRange_mask(img):
 
     return [inv_mask_b, mask_sanity]
 
+
 def hsv_set_to(bgr_img, lwr, upr, BGRSet):
     '''
     filter BGR image to get pixels between lwr, and upr in hsv color scheme
@@ -445,6 +473,7 @@ def hsv_set_to(bgr_img, lwr, upr, BGRSet):
     res = bgr_img.copy()
     res[mask > 0] = BGRSet
     return res
+
 
 def hsv_filter(bgr_img, lwr, upr):
     '''
@@ -483,12 +512,12 @@ def make_edge_mask(img):
     # edge detection
     blurred = cv2.GaussianBlur(gray, (11, 11), 0)
     edges = cv2.Canny(blurred, 40, 100)
-    #show_pics([edges])
+    # show_pics([edges])
 
     # broaden edges - make contiguous lines
     thick_edges = cv2.GaussianBlur(edges, (15, 15), 0)
     thick_edges[thick_edges > 0] = 255
-    #show_pics([thick_edges])
+    # show_pics([thick_edges])
 
     # # convert edges to contours - just use edges!
     # _, contours, _ = cv2.findContours(thick_edges,
@@ -591,8 +620,8 @@ def get_connected_components(imgs, key_order):
         for i, filename in enumerate(key_order[prefix]):
             mask = imgs[filename][1]
 
-            n_labels, labels, stats, centroids =\
-             cv2.connectedComponentsWithStats(mask, connectivity=8)
+            n_labels, labels, stats, centroids = \
+            cv2.connectedComponentsWithStats(mask, connectivity=8)
 
             # if first img in current timeseries, generate colors
             if (i == 0):
