@@ -22,6 +22,11 @@ int light;
 
 int NTC_PIN1 = A0;
 int LDR_PIN = A1;
+int PLT_COLD = 7;
+int PLT_HOT = 8;
+int R_PIN = 9;
+int Y_PIN 10 ;
+int B_PIN = 11;
 
 
 // LOCAL DATA HANDLING
@@ -137,6 +142,9 @@ void loop() {
     for (int i = 0; i<sizeof(request); i++) {
       request[i] = 0xFF;  // Reset data to be all 255
     }
+    analogWrite(R_PIN, R_intensity);
+    analogWrite(Y_PIN, Y_intensity);
+    analogWrite(B_PIN, B_intensity);
   }
   else if (Serial.available() > 0) { // Request is being received (ongoing)
     if (received_bytes == 0) {
