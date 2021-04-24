@@ -1,11 +1,11 @@
-int Rdutycycle = 5;
-int Ydutycycle = 5;
-int Bdutycycle = 5;
+int Rdutycycle = 100;
+int Ydutycycle = 100;
+int Bdutycycle = 100;
 int channel;
 
-const int Rpin = 5;
-const int Ypin = 6;
-const int Bpin = 7;
+const int Rpin = 9;
+const int Ypin = 10;
+const int Bpin = 11;
 
 
 void setup() {

@@ -11,7 +11,13 @@ working well)
 - finalise segment size parameters
 - finalise resizing (for input to araDEEPopsis) parameters
 
-- thermal / colour image registration.
+- thermal / colour image registration:
+  - transfer alignment functionality from `register_dummy_imgs.py` to `preprocessor.py`
+  - optimise pre-alignment image processing steps & parameters, choice of alignment function,
+  and alignment function parameters for real plant images from the box.
+  - add image alignment output debugging pictures to the Rshiny app.
+
+
 - colour normalisation
 - (?thermal normalisation?)
 - calculate size / scale of pixels in final image
