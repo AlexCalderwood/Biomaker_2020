@@ -4,12 +4,12 @@ from image_capture.lepton_utils import LeptonCamera, LeptonError
 from picamera import PiCamera
 from time import sleep
 from datetime import datetime
-import os
+import os, sys
 
 
-def run():
+def run(recipe):
 
-    recipe = "recipe_0.csv"
+    #recipe = "recipe_1.csv"
     read_path = "recipes/"
     start_time = None
     picam = None
@@ -26,12 +26,14 @@ def run():
                 if start_time is None:  # First time opening a line
                     start_time = data[0]  # Obtain start time of logging (first entry)
                     save_path = "recorded_data/"  # Place to save the data
-                    dirname = start_time.strftime("%y-%m-%d-%H_%M_%S")  # Convert start time to string format
+                    dirname = start_time.strftime("%Y-%m-%d-%H_%M_%S")  # Convert start time to string format
                     dirname = create_new_dir(save_path, dirname)  # Create new folder to put data in, and retrieve created folder name
-                    lepcam.set_img_dir(save_path+dirname)
+                    os.makedirs(save_path + dirname + "/raw_data")
+                    os.makedirs(save_path + dirname + "/processed_data")
+                    lepcam.set_img_dir(save_path+dirname + "/raw_data")
                     
                     headers = "time_logged, t_1, t_2, h_1, h_2, light"  # Headers of logfile
-                    with open(f"{save_path}{dirname}/{dirname}.txt", "a") as datafile:  # Create new logfile
+                    with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", "a") as datafile:  # Create new logfile
                         datafile.write(headers + "\n")  # Write headers with a newline character on the end
 
                 while True:
@@ -46,11 +48,14 @@ def run():
                         request_env_data(ser, data)
                         env_data = read_env_data(ser)
                         if data[1]:
+                            print("data1", data[1])
                             sleep(0.5)  # Let the white lights turn on
-                            logtime = datetime.now().strftime("%y-%m-%d-%H_%M_%S")
+                            logtime = datetime.now()
+                            logtimestr = logtime.strftime("%Y-%m-%d-%H_%M_%S")
                             print("IR Image")
                             try:
-                                ir_image = lepcam.generate_img(img_name=f"IR{logtime}.png")
+                                #ir_image = lepcam.generate_img(img_name=f"IR{logtimestr}.png")
+                                pass
                             except LeptonError:
                                 print("Lepton error")
                             if not picam:
@@ -60,7 +65,7 @@ def run():
                                 sleep(2)
                             print("RGB Image")
                             try:
-                                rgb_image = picam.capture(f"{save_path}{dirname}/RBG{logtime}.jpg")
+                                rgb_image = picam.capture(f"{save_path}{dirname}/raw_data/RBG{logtimestr}.jpg")
                             except Exception as e:
                                 print("Picamera error:", e)
                             print("Close camera")
@@ -68,6 +73,7 @@ def run():
                             picam = None
                             # Save data
                             print("Save data")
+                            env_data[0] = logtime
                             save_data(save_path, dirname, env_data)
 
                         # Write data to cloud?
@@ -88,10 +94,16 @@ def run():
                         print("Resting")
                         sleep(time_to_wait - 2.5)  # Wake up just before required time
     except Exception as e:
-        with open(f"{save_path}{dirname}/{dirname}.txt", "a") as datafile:  # Create new logfile
+        with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", "a") as datafile:  # Create new logfile
             print("Log error:", e)
-            datafile.write("\n\n" + str(e))  # Write headers with a newline character on the end
+            datafile.write("\n\n{logtimestr}: " + str(e))  # Write headers with a newline character on the end
     finally:
+        #os.rename(f"{save_path}{dirname}/raw_data/{dirname}.tmp", f"{save_path}{dirname}/raw_data/{dirname}.txt")       
+        with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", 'r') as tmp:
+            with open(f"{save_path}{dirname}/raw_data/{dirname}.txt", 'w') as txt:
+                txt.write(tmp.read())
+        os.remove(f"{save_path}{dirname}/raw_data/{dirname}.tmp")
+
         # Tidy up everything
         if picam:
             picam.close()
@@ -100,4 +112,10 @@ def run():
         
 
 if __name__ == "__main__":
-    run()
+    if len(sys.argv) > 1:
+        if os.path.exists("recipes/" + sys.argv[1]):
+            run(sys.argv[1])
+        else:
+            print("Invalid recipe name:", sys.argv[1])
+    else:
+        print("No recipe name provided: \"python3 launch_recipe.py <recipe_name>.csv")
