@@ -131,14 +131,17 @@ def run():
     layout = [
         [sg.Text("Test Start:")],
         [sg.CalendarButton('Date', close_when_date_chosen=False, target="-DATE-", format="%Y-%m-%d"),
-        sg.Text("Time (24h)")],
+        sg.Text("Time (24h)"), sg.InputText(key="-INCRHOURS-", size=(2,1), enable_events=True, pad=((5,0), (0,0))), sg.Text(":", pad=((0,0), (0,0))),
+         sg.InputText(key="-INCRMINUTES-", size=(2,1), enable_events=True, pad=((0,0), (0,0))), sg.Text(":", pad=((0,0), (0,0))),
+         sg.InputText(key="-INCRSECONDS-", size=(2,1), enable_events=True, pad=((0,5), (0,0))), sg.Checkbox(key='-INCR-', tooltip="Check to automatically increment timestamp.", text="")],
         [gipt("-DATE-", (10,1)), sg.InputText(key="-HOURS-", size=(2,1), enable_events=True, pad=((5,0), (0,0))), sg.Text(":", pad=((0,0), (0,0))),
          sg.InputText(key="-MINUTES-", size=(2,1), enable_events=True, pad=((0,0), (0,0))), sg.Text(":", pad=((0,0), (0,0))),
          sg.InputText(key="-SECONDS-", size=(2,1), enable_events=True, pad=((0,5), (0,0))),
         gipt("-RED-", (3,1)), gipt("-WHITE-", (3,1)), gipt("-BLUE-", (3,1)), gipt("-TEMP-", (4,1)),
+        sg.Checkbox(key='-LOG-', tooltip="Check to log images and data at this timestamp.", text=""),
         sg.Button(key="-ADD-", button_text="+", enable_events=True),
         sg.Button(key="-DEL-", button_text="x", enable_events=True)],
-        [sg.Frame(key="-RECIPE-", title="Recipe", layout=[])],
+        [sg.Multiline(key="-RECIPE-", size=(50, 15), enable_events=True, default_text="Time, Date, Red, White, Blue, Temp, Log, Flash")],
         [sg.Button("Save")]
     ]
 
@@ -169,7 +172,10 @@ def run():
                 '-BLUE-': '',
                 '-ADD-': '',
                 '-DEL-': '',
-                '-RECIPE-': ''}
+                '-RECIPE-': '',
+                '-INCRHOURS-': '',
+                '-INCRMINUTES-': '',
+                '-INCRSECONDS-': ''}
 
     # Functions with prespecified parameters for each element, determining valid input data
     input_handlers = {'Date': None,
@@ -188,7 +194,10 @@ def run():
                 '-BLUE-': lambda : validate_numeric_input(old_values["-BLUE-"], new_values["-BLUE-"], whitelist="1234567890", char_limits=(0,3)),
                 '-ADD-': None,
                 '-DEL-': None,
-                '-RECIPE-': None}
+                '-RECIPE-': None,
+                '-INCRHOURS-': '',
+                '-INCRMINUTES-': '',
+                '-INCRSECONDS-': ''}
 
     # Acceptable value limits for numeric inputs, used for updating when the user clicks off a field
     outfocus_limits = {'Date': None,
@@ -207,9 +216,11 @@ def run():
                 '-BLUE-': (0,254),
                 '-ADD-': None,
                 '-DEL-': None,
-                '-RECIPE-': None}
+                '-RECIPE-': None,
+                '-INCRHOURS-': (0,99),
+                '-INCRMINUTES-': (0,59),
+                '-INCRSECONDS-': (0,59)}
 
-    i = 0
     while True:
         event, new_values = window.read()
         print(event)
@@ -236,27 +247,20 @@ def run():
                 window1 = sg.Window("Recipe Creator", layout, finalize=True)
                 window.Close()
                 window = window1"""
-                new_row = [[sg.Text(key=f"-DATE-{i}", text=new_values["-DATE-"], size=(10,1)),
-                sg.Text(key=f"-HOURS-{i}", text=new_values["-HOURS-"], size=(2,1), pad=((5,0),(0,0))), 
-                sg.Text(key=f"-:HM-{i}", text=":", pad=((0,0),(0,0))), sg.Text(key=f"-MINUTES-{i}", text=new_values["-MINUTES-"], size=(2,1), pad=((0,0),(0,0))),
-                sg.Text(key=f"-:MS-{i}", text=":", pad=((0,0),(0,0))), sg.Text(key=f"-SECONDS-{i}", text=new_values["-SECONDS-"], size=(2,1), pad=((0,5),(0,0))),
-                sg.Text(key=f"-RED-{i}", text=new_values["-RED-"], size=(3,1)), sg.Text(key=f"-WHITE-{i}", text=new_values["-WHITE-"], size=(3,1)),
-                sg.Text(key=f"-BLUE-{i}", text=new_values["-BLUE-"], size=(3,1)), sg.Text(key=f"-TEMP-{i}", text=new_values["-TEMP-"], size=(4,1)),
-                sg.Button(key=f"-HIDE-{i}", button_text="x")]]
+                new_row = new_values["-DATE-"] + ", " + new_values["-HOURS-"] \
+                 + ":" + new_values["-MINUTES-"] + ":" + new_values["-SECONDS-"] \
+                 + ", " + new_values["-RED-"] + ", " + new_values["-WHITE-"] \
+                 + ", " + new_values["-BLUE-"] + ", " + new_values["-TEMP-"] \
+                 + ", " + ("1" if new_values['-LOG-'] else "0")
                 if "" not in [new_values["-DATE-"], new_values["-HOURS-"], new_values["-MINUTES-"], new_values["-SECONDS-"],
                               new_values["-RED-"], new_values["-WHITE-"], new_values["-BLUE-"], new_values["-TEMP-"]]:
-                    window.extend_layout(window['-RECIPE-'], new_row)
-                    i += 1
+                    window['-RECIPE-'].Update(new_values['-RECIPE-'] + new_row)
             elif event == "-DEL-":
                 for e in ["-DATE-", "-HOURS-", "-MINUTES-", "-SECONDS-", "-RED-", "-WHITE-", "-BLUE-", "-TEMP-"]:
                     window[e].update("", move_cursor_to=None)  # Update UI, keep cursor where it was
                     new_values[e] = ""
-            elif "-HIDE-" in event:
-                print("this far")
-                ri = int(event[6:])
-
-                for e in [f"-DATE-{ri}", f"-HOURS-{ri}", f"-:HM-{ri}", f"-:MS-{ri}", f"-MINUTES-{ri}", f"-SECONDS-{ri}", f"-RED-{ri}", f"-WHITE-{ri}", f"-BLUE-{ri}", f"-TEMP-{ri}", f"-HIDE-{ri}"]:
-                    window.Element(e).Update(visible=False)
+                window['-LOG-'].update(False)
+                new_values['-LOG-'] = False
         else:
             event = event[:-8]  # Remove OUTFOCUS footer
             new_input = update_on_outfocus(old_values[event], new_values[event], outfocus_limits[event])
