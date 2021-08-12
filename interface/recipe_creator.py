@@ -4,6 +4,7 @@ import PySimpleGUI as sg
 def autofill_datetimes(data):
     """ Takes in start, end, number, interval values and calculates any missing one (if applicable)
     """
+    print("data", data)
     missing = None
     new_data = data[:]
     clean_data = data[:]
@@ -15,13 +16,16 @@ def autofill_datetimes(data):
     ]
 
     if data.count(None) > 1:  # Too many unknowns
+        print("too many unknowns")
         pass
     elif data.count(None) == 0:  # No unknowns
+        print("no unknowns")
         pass
     else:
         missing = data.index(None)  # Location of the one unknown
         new_data[missing] = autofill_functions[missing]()  # Fill unknown using corresponding function
         clean_data = [convert_value(param) for param in new_data]
+        print("clean_data", clean_data)
 
     return clean_data, missing
 
@@ -122,22 +126,19 @@ def update_on_outfocus(old_text, new_text, value_limits=None, round_ints=True):
 
 def run():
     
-    gipt = lambda key, size: sg.InputText(key=key, enable_events=True, size=size)  # Generic InputText
+    gipt = lambda key, size: sg.InputText(key=key, enable_events=True, size=size)  # Generic InputText to neaten layout list
 
     layout = [
         [sg.Text("Test Start:")],
-        [sg.CalendarButton('Date', close_when_date_chosen=False, target="-DATE-", format="%Y-%m-%d", ),
+        [sg.CalendarButton('Date', close_when_date_chosen=False, target="-DATE-", format="%Y-%m-%d"),
         sg.Text("Time (24h)")],
-        [gipt("-DATE-", (10,1)), gipt("-HOURS-", (2,1)), sg.Text(":"), gipt("-MINUTES-", (2,1)), sg.Text(":"), gipt("-SECONDS-", (2,1))],
-        [sg.Text("Imaging:")],
-        [sg.Text("Start"), sg.Text("End"), sg.Text("Number"), sg.Text("Interval")],
-        [gipt("-START-", (4,1)), gipt("-END-", (4,1)), gipt("-NUMBER-", (4,1)), gipt("-INTERVAL-", (4,1)), sg.Button("Calculate")],
-        [sg.Text("Temperature:")],
-        [sg.Text("Temp")],
-        [gipt("-TEMP-", (4,1))],
-        [sg.Text("Lighting:")],
-        [sg.Text("Red"), sg.Text("White"), sg.Text("Blue")],
-        [gipt("-RED-", (3,1)), gipt("-WHITE-", (3,1)), gipt("-BLUE-", (3,1))],
+        [gipt("-DATE-", (10,1)), sg.InputText(key="-HOURS-", size=(2,1), enable_events=True, pad=((5,0), (0,0))), sg.Text(":", pad=((0,0), (0,0))),
+         sg.InputText(key="-MINUTES-", size=(2,1), enable_events=True, pad=((0,0), (0,0))), sg.Text(":", pad=((0,0), (0,0))),
+         sg.InputText(key="-SECONDS-", size=(2,1), enable_events=True, pad=((0,5), (0,0))),
+        gipt("-RED-", (3,1)), gipt("-WHITE-", (3,1)), gipt("-BLUE-", (3,1)), gipt("-TEMP-", (4,1)),
+        sg.Button(key="-ADD-", button_text="+", enable_events=True),
+        sg.Button(key="-DEL-", button_text="x", enable_events=True)],
+        [sg.Frame(key="-RECIPE-", title="Recipe", layout=[])],
         [sg.Button("Save")]
     ]
 
@@ -161,10 +162,14 @@ def run():
                 '-END-': '',
                 '-NUMBER-': '',
                 '-INTERVAL-': '',
+                '-CALCULATE-': '',
                 '-TEMP-': '',
                 '-RED-': '',
                 '-WHITE-': '',
-                '-BLUE-': ''}
+                '-BLUE-': '',
+                '-ADD-': '',
+                '-DEL-': '',
+                '-RECIPE-': ''}
 
     # Functions with prespecified parameters for each element, determining valid input data
     input_handlers = {'Date': None,
@@ -176,10 +181,14 @@ def run():
                 '-END-': None,
                 '-NUMBER-': None,
                 '-INTERVAL-': None,
+                '-CALCULATE-': None,
                 '-TEMP-': lambda : validate_numeric_input(old_values["-TEMP-"], new_values["-TEMP-"], whitelist="1234567890.", char_limits=(0,4)),
                 '-RED-': lambda : validate_numeric_input(old_values["-RED-"], new_values["-RED-"], whitelist="1234567890", char_limits=(0,3)),
                 '-WHITE-': lambda : validate_numeric_input(old_values["-WHITE-"], new_values["-WHITE-"], whitelist="1234567890", char_limits=(0,3)),
-                '-BLUE-': lambda : validate_numeric_input(old_values["-BLUE-"], new_values["-BLUE-"], whitelist="1234567890", char_limits=(0,3))}
+                '-BLUE-': lambda : validate_numeric_input(old_values["-BLUE-"], new_values["-BLUE-"], whitelist="1234567890", char_limits=(0,3)),
+                '-ADD-': None,
+                '-DEL-': None,
+                '-RECIPE-': None}
 
     # Acceptable value limits for numeric inputs, used for updating when the user clicks off a field
     outfocus_limits = {'Date': None,
@@ -191,50 +200,72 @@ def run():
                 '-END-': None,
                 '-NUMBER-': None,
                 '-INTERVAL-': None,
+                '-CALCULATE-': None,
                 '-TEMP-': (0,40),
                 '-RED-': (0,254),
                 '-WHITE-': (0,254),
-                '-BLUE-': (0,254)}
+                '-BLUE-': (0,254),
+                '-ADD-': None,
+                '-DEL-': None,
+                '-RECIPE-': None}
 
-
+    i = 0
     while True:
         event, new_values = window.read()
-        if event == sg.WIN_CLOSED or event == "Save":  # Check exit events
+        print(event)
+        if event == sg.WIN_CLOSED:  # Check exit events
             break
+        elif event == "Save":
+            namefile = sg.PopupGetFile('Enter Filename', save_as=True)
+            print(namefile)
+            if namefile:  # SHOULD ALSO CHECK IF VALID
+                break
+        if "OUTFOCUS" not in event:  # If it is an classical event (all widgets are handled in this IF, as outlined above)
+            if event in input_handlers:
+                if input_handlers[event] is not None:  # If there needs to be input validation
+                    new_input = input_handlers[event]()  # Call prespecified input validation function
+                    window[event].update(new_input, move_cursor_to=None)  # Update UI, keep cursor where it was
+                    new_values[event] = new_input  # Update local list of values
+            if event == '-ADD-':
+                """layout.insert(-1, [sg.Text(text=new_values["-DATE-"]), sg.Text(text=new_values["-HOURS-"]), 
+                sg.Text(text=new_values["-MINUTES-"]), sg.Text(text=new_values["-SECONDS-"]), sg.Text(text=new_values["-RED-"]), 
+                sg.Text(text=new_values["-WHITE-"]), sg.Text(text=new_values["-BLUE-"]), sg.Text(text=new_values["-TEMP-"])])
+                for e in ["-HOURS-", "-MINUTES", "-SECONDS-", "-RED-", "-WHITE-", "-BLUE-", "-TEMP-"]:
+                    window[e].update("", move_cursor_to=None)  # Update UI, keep cursor where it was
+                    new_values[e] = ""
+                window1 = sg.Window("Recipe Creator", layout, finalize=True)
+                window.Close()
+                window = window1"""
+                new_row = [[sg.Text(key=f"-DATE-{i}", text=new_values["-DATE-"], size=(10,1)),
+                sg.Text(key=f"-HOURS-{i}", text=new_values["-HOURS-"], size=(2,1), pad=((5,0),(0,0))), 
+                sg.Text(key=f"-:HM-{i}", text=":", pad=((0,0),(0,0))), sg.Text(key=f"-MINUTES-{i}", text=new_values["-MINUTES-"], size=(2,1), pad=((0,0),(0,0))),
+                sg.Text(key=f"-:MS-{i}", text=":", pad=((0,0),(0,0))), sg.Text(key=f"-SECONDS-{i}", text=new_values["-SECONDS-"], size=(2,1), pad=((0,5),(0,0))),
+                sg.Text(key=f"-RED-{i}", text=new_values["-RED-"], size=(3,1)), sg.Text(key=f"-WHITE-{i}", text=new_values["-WHITE-"], size=(3,1)),
+                sg.Text(key=f"-BLUE-{i}", text=new_values["-BLUE-"], size=(3,1)), sg.Text(key=f"-TEMP-{i}", text=new_values["-TEMP-"], size=(4,1)),
+                sg.Button(key=f"-HIDE-{i}", button_text="x")]]
+                if "" not in [new_values["-DATE-"], new_values["-HOURS-"], new_values["-MINUTES-"], new_values["-SECONDS-"],
+                              new_values["-RED-"], new_values["-WHITE-"], new_values["-BLUE-"], new_values["-TEMP-"]]:
+                    window.extend_layout(window['-RECIPE-'], new_row)
+                    i += 1
+            elif event == "-DEL-":
+                for e in ["-DATE-", "-HOURS-", "-MINUTES-", "-SECONDS-", "-RED-", "-WHITE-", "-BLUE-", "-TEMP-"]:
+                    window[e].update("", move_cursor_to=None)  # Update UI, keep cursor where it was
+                    new_values[e] = ""
+            elif "-HIDE-" in event:
+                print("this far")
+                ri = int(event[6:])
 
-        if event in old_values:  # If it is a classical event
-            if input_handlers[event] is not None:  # If there needs to be input validation
-                new_input = input_handlers[event]()  # Call prespecified input validation function
-                window[event].update(new_input)  # Update UI
-                new_values[event] = new_input  # Update local list of values
-        elif len(event) > 8:
-            if event[-8:] == "OUTFOCUS":  # If it is an outfocus event (appended by OUTFOCUS)
-                event = event[:-8]  # Remove OUTFOCUS footer
-                new_input = update_on_outfocus(old_values[event], new_values[event], outfocus_limits[event])
-                if event in ['-HOURS-', '-MINUTES-', '-SECONDS-'] and len(new_input) == 1:  # If its a time, and has only 1 digit
-                    new_input = "0" + new_input  # Add a 0 onto the front, e.g. 00:00, 03:08
-                window[event].update(new_input)  # Update UI
-                new_values[event] = new_input  # Update local list of values
-
-        if event in ["temp", "red", "white", "blue"] and values[event]:  # Check special inputs are valid (0-254)
-            if int(values[event]) < 0:
-                window[event].update(0)
-            elif int(values[event]) > 254:
-                window[event].update(254)
-            else:
-                window[event].update(int(values[event]))
-        elif event == "Calculate":
-            keys = ["start", "end", "number", "interval"]
-            img_params = [convert_value(values[key]) for key in keys]  # Convert UI entries to useful datatypes
-            img_params, changed = autofill_datetimes(img_params)  # Calculate any missing value
-            if not (changed is None):  # If something has been changed (calculated)
-                window[keys[changed]].update(img_params[changed])  # Update the UI with the change
-
-        print("event", event)
+                for e in [f"-DATE-{ri}", f"-HOURS-{ri}", f"-:HM-{ri}", f"-:MS-{ri}", f"-MINUTES-{ri}", f"-SECONDS-{ri}", f"-RED-{ri}", f"-WHITE-{ri}", f"-BLUE-{ri}", f"-TEMP-{ri}", f"-HIDE-{ri}"]:
+                    window.Element(e).Update(visible=False)
+        else:
+            event = event[:-8]  # Remove OUTFOCUS footer
+            new_input = update_on_outfocus(old_values[event], new_values[event], outfocus_limits[event])
+            if event in ['-HOURS-', '-MINUTES-', '-SECONDS-'] and len(new_input) == 1:  # If its a time, and has only 1 digit
+                new_input = "0" + new_input  # Add a 0 onto the front, e.g. 00:00, 03:08
+            window[event].update(new_input)  # Update UI
+            new_values[event] = new_input  # Update local list of values
+                
         old_values = new_values
-
-    if event == "Save":
-        pass
 
 
 if __name__ == "__main__":
