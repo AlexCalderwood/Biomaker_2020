@@ -1,4 +1,5 @@
 import PySimpleGUI as sg
+import datetime as dt  # Must be datetime for datetime.datetime and datetime.timestamp
 
 
 def autofill_datetimes(data):
@@ -123,6 +124,16 @@ def update_on_outfocus(old_text, new_text, value_limits=None, round_ints=True):
     return new_text
         
 
+def add_extra_time(date1, hours1, minutes1, seconds1, hours2, minutes2, seconds2):
+    old_stamp = dt.datetime.strptime(f"{date1} {hours1}:{minutes1}:{seconds1}", "%Y-%m-%d %H:%M:%S")
+    extra_time = dt.timedelta(hours = int(hours2) if hours2 != "" else 0,
+     minutes = int(minutes2) if minutes2 != "" else 0,
+      seconds = int(seconds2) if seconds2 != "" else 0)
+    new_stamp = dt.datetime.strftime(old_stamp+extra_time, "%Y-%m-%d %H:%M:%S")
+    return new_stamp
+
+
+
 
 def run():
     
@@ -154,6 +165,9 @@ def run():
     window['-RED-'].bind('<FocusOut>', 'OUTFOCUS')
     window['-WHITE-'].bind('<FocusOut>', 'OUTFOCUS')
     window['-BLUE-'].bind('<FocusOut>', 'OUTFOCUS')
+    window['-INCRHOURS-'].bind('<FocusOut>', 'OUTFOCUS')
+    window['-INCRMINUTES-'].bind('<FocusOut>', 'OUTFOCUS')
+    window['-INCRSECONDS-'].bind('<FocusOut>', 'OUTFOCUS')
 
     # Default states of all elements
     old_values = {'Date': '',
@@ -175,7 +189,8 @@ def run():
                 '-RECIPE-': '',
                 '-INCRHOURS-': '',
                 '-INCRMINUTES-': '',
-                '-INCRSECONDS-': ''}
+                '-INCRSECONDS-': '',
+                '-INCR-': ''}
 
     # Functions with prespecified parameters for each element, determining valid input data
     input_handlers = {'Date': None,
@@ -195,9 +210,9 @@ def run():
                 '-ADD-': None,
                 '-DEL-': None,
                 '-RECIPE-': None,
-                '-INCRHOURS-': '',
-                '-INCRMINUTES-': '',
-                '-INCRSECONDS-': ''}
+                '-INCRHOURS-': lambda : validate_numeric_input(old_values["-INCRHOURS-"], new_values["-INCRHOURS-"], whitelist="1234567890", char_limits=(0,2)),
+                '-INCRMINUTES-': lambda : validate_numeric_input(old_values["-INCRMINUTES-"], new_values["-INCRMINUTES-"], whitelist="1234567890", char_limits=(0,2)),
+                '-INCRSECONDS-': lambda : validate_numeric_input(old_values["-INCRSECONDS-"], new_values["-INCRSECONDS-"], whitelist="1234567890", char_limits=(0,2)),}
 
     # Acceptable value limits for numeric inputs, used for updating when the user clicks off a field
     outfocus_limits = {'Date': None,
@@ -247,7 +262,7 @@ def run():
                 window1 = sg.Window("Recipe Creator", layout, finalize=True)
                 window.Close()
                 window = window1"""
-                new_row = new_values["-DATE-"] + ", " + new_values["-HOURS-"] \
+                new_row = new_values["-DATE-"] + " " + new_values["-HOURS-"] \
                  + ":" + new_values["-MINUTES-"] + ":" + new_values["-SECONDS-"] \
                  + ", " + new_values["-RED-"] + ", " + new_values["-WHITE-"] \
                  + ", " + new_values["-BLUE-"] + ", " + new_values["-TEMP-"] \
@@ -255,8 +270,19 @@ def run():
                 if "" not in [new_values["-DATE-"], new_values["-HOURS-"], new_values["-MINUTES-"], new_values["-SECONDS-"],
                               new_values["-RED-"], new_values["-WHITE-"], new_values["-BLUE-"], new_values["-TEMP-"]]:
                     window['-RECIPE-'].Update(new_values['-RECIPE-'] + new_row)
+                if new_values['-INCR-']:
+                    new_time = add_extra_time(new_values['-DATE-'], new_values['-HOURS-'], new_values['-MINUTES-'], new_values['-SECONDS-'],
+                     new_values['-INCRHOURS-'], new_values['-INCRMINUTES-'], new_values['-INCRSECONDS-'])
+                    window['-DATE-'].update(new_time[:10])
+                    new_values['-DATE-'] = new_time[:10]
+                    window['-HOURS-'].update(new_time[11:13])
+                    new_values['-HOURS-'] = new_time[11:13]
+                    window['-MINUTES-'].update(new_time[14:16])
+                    new_values['-MINUTES-'] = new_time[14:16]
+                    window['-SECONDS-'].update(new_time[17:19])
+                    new_values['-SECONDS-'] = new_time[17:19]
             elif event == "-DEL-":
-                for e in ["-DATE-", "-HOURS-", "-MINUTES-", "-SECONDS-", "-RED-", "-WHITE-", "-BLUE-", "-TEMP-"]:
+                for e in ["-DATE-", "-HOURS-", "-MINUTES-", "-SECONDS-", "-RED-", "-WHITE-", "-BLUE-", "-TEMP-", '-INCRHOURS-', '-INCRMINUTES-', '-INCRSECONDS-']:
                     window[e].update("", move_cursor_to=None)  # Update UI, keep cursor where it was
                     new_values[e] = ""
                 window['-LOG-'].update(False)
@@ -264,7 +290,7 @@ def run():
         else:
             event = event[:-8]  # Remove OUTFOCUS footer
             new_input = update_on_outfocus(old_values[event], new_values[event], outfocus_limits[event])
-            if event in ['-HOURS-', '-MINUTES-', '-SECONDS-'] and len(new_input) == 1:  # If its a time, and has only 1 digit
+            if event in ['-HOURS-', '-MINUTES-', '-SECONDS-', '-INCRHOURS-', '-INCRMINUTES-', '-INCRSECONDS-'] and len(new_input) == 1:  # If its a time, and has only 1 digit
                 new_input = "0" + new_input  # Add a 0 onto the front, e.g. 00:00, 03:08
             window[event].update(new_input)  # Update UI
             new_values[event] = new_input  # Update local list of values
