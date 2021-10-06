@@ -1,8 +1,22 @@
-int dutycycle = 5;
+int dutycycle =247;
+int outPin = 6;
+
+
+// 6 is blue
+// 9 is IR
+// 10 is white
+// 11 is red
 
 void setup() {
   // put your setup code here, to run once:
+  pinMode(11, OUTPUT);
+  pinMode(10, OUTPUT);
+  pinMode(9, OUTPUT);
   pinMode(6, OUTPUT);
+  analogWrite(11,255);
+  analogWrite(10,255);
+  analogWrite(9,255);
+  analogWrite(6,255);
   Serial.begin(9600);
 }
 
@@ -18,7 +32,7 @@ void loop() {
     }
     Serial.println(dutycycle);
   }
-  analogWrite(6, dutycycle);
+  analogWrite(outPin, dutycycle);
   
 
 }
