@@ -30,10 +30,10 @@ int TIC2_PIN = A2;      // Bed TIC
 int TIC3_PIN = A3;      // Bed TIC
 int TIC4_PIN = A4;      // Bed TIC
 int TIC5_PIN = A5;      // Bed TIC
-int BED_PLR1A_PIN = 1;  // Bed PLR 1 pin A
-int BED_PLR1B_PIN = 2;  // Bed PLR 1 pin B
-int BED_PLR2A_PIN = 3;  // Bed PLR 2 pin A
-int BED_PLR2B_PIN = 4;  // Bed PLR 2 pin B
+int BED_PLR1A_PIN = 2;  // Bed PLR 1 pin A
+int BED_PLR1B_PIN = 1;  // Bed PLR 1 pin B
+int BED_PLR2A_PIN = 4;  // Bed PLR 2 pin A
+int BED_PLR2B_PIN = 3;  // Bed PLR 2 pin B
 int BLUE_PIN = 6;       // Blue LED control pin (255 = OFF)
 int LS_PIN = 8;         // Limit switch pin
 int IR_PIN = 9;         // IR LED control pin (255 = OFF)
@@ -44,21 +44,21 @@ int ROOF_PLR_PIN = 12;  // Roof peltier control pin (HIGH = ON)
 
 // Definitions for target parameters
 
-int target_temp;
-int B_intensity;
-int I_intensity;
-int W_intensity;
-int R_intensity;
-bool ACTIVATE_CFI;
+float target_temp = 23.0;
+int B_intensity = 255;
+int I_intensity = 255;
+int W_intensity = 255;
+int R_intensity = 255;
+bool ACTIVATE_CFI = false;
 
 
-int ml_intensity = 247;
-int al_intensity = 240;
+int ml_intensity = 240;
+int al_intensity = 230;
 int al_duration = 20;  // (s)
 int al_kaustki_duration = 10;  // (s)
-int sp_intensity = 230;
+int sp_intensity = 200;
 int sp_duration = 60;  // (10s of ms)
-int rf_intensity = 245;  // Red flash intensity
+int rf_intensity = 210;  // Red flash intensity
 int rf_duration = 100;  // Red flash duration (ms)
 int da_time = 1;  // dark adjustment time (minutes)
 
@@ -68,17 +68,19 @@ int sp_repeat_duration; // time for periodic SPs to continue
 
 // Definitions for measured parameters
 
-int temp0;
-int temp1;
-int temp2;
-int temp3;
-int temp4;
-int temp5;
+float temp0;
+float temp1;
+float temp2;
+float temp3;
+float temp4;
+float temp5;
 
-int read_temperature(int temp_pin) {
+float read_temperature(int temp_pin) {
   // Reads temperature from Temperature IC
-  int raw = analogRead(temp_pin);
-  return (raw * (4860/1024) - 2100.7)/(-10.791);  // Derived from least-squares fit (from excel) of LMT86 data between 0 and 40 degrees C
+  float raw = analogRead(temp_pin);
+  float millivolts = raw * 5000 / 1024;
+  float temp = (millivolts - 2100.7)/(-10.791);  // Derived from least-squares fit (from excel) of LMT86 data between 0 and 40 degrees C
+  return temp;  // Derived from least-squares fit (from excel) of LMT86 data between 0 and 40 degrees C
 }
 
 void update_data(){
@@ -89,6 +91,7 @@ void update_data(){
   temp3 = read_temperature(TIC3_PIN);
   temp4 = read_temperature(TIC4_PIN);
   temp5 = read_temperature(TIC5_PIN);
+  /*
   Serial.print("Temperatures: ");
   Serial.print(temp0);
   Serial.print(", ");
@@ -101,6 +104,7 @@ void update_data(){
   Serial.print(temp4);
   Serial.print(", ");
   Serial.println(temp5);
+  */
 }
 
 
@@ -116,8 +120,8 @@ bool update_limit_switch() {
   if (CURRENT_STATE != DOOR_CLOSED && (millis()-last_toggle) >= debounce_period){
     DOOR_CLOSED = CURRENT_STATE;  // Only read when value changes
     last_toggle = millis();  // To deal with debounce of the switch
-    Serial.print("Door closed: ");
-    Serial.println(DOOR_CLOSED);
+    //Serial.print("Door closed: ");
+    //Serial.println(DOOR_CLOSED);
   }
 }
 
@@ -130,27 +134,33 @@ unsigned long receive_time;
 unsigned long last_received;  // Time most recent byte was received
 int serial_timeout = 500;  // Time until message is presumed dead and buffer (data array) is emptied
 int flushed_bytes;
-byte request[25] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+byte request[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 // Request is initialised as 255 which is overwritten as correct data comes in, or not if the request times out
 
 void interpret_request(){
-  if (request[0] != 0xFF) target_temp = 255 - (int) request[19];
-  if (request[1] != 0xFF) B_intensity = 255 - (int) request[20];
-  if (request[2] != 0xFF) I_intensity = 255 - (int) request[21];
-  if (request[3] != 0xFF) R_intensity = 255 - (int) request[22];
-  if (request[4] != 0xFF) W_intensity = 255 - (int) request[23];
-  if (request[5] != 0xFF) W_intensity = (bool) request[23];
+  if (request[0] != 0xFF) target_temp = (int) request[0];
+  if (request[1] != 0xFF) B_intensity = 255 - (int) request[1];
+  if (request[2] != 0xFF) I_intensity = 255 - (int) request[2];
+  if (request[3] != 0xFF) W_intensity = 255 - (int) request[3];
+  if (request[4] != 0xFF) R_intensity = 255 - (int) request[4];
+  if (request[5] != 0xFF) ACTIVATE_CFI = (bool) request[5];
 }
 
 void send_ack() {
   Serial.write(request, sizeof(request));
-  Serial.write(temp0);
-  Serial.write(temp1);
-  Serial.write(temp2);
-  Serial.write(temp3);
-  Serial.write(temp4);
-  Serial.write(temp5);
-  Serial.write((unsigned long)(millis()- receive_time));
+  //Serial.write(target_temp);
+  //Serial.write(B_intensity);
+  //Serial.write(I_intensity);
+  //Serial.write(W_intensity);
+  //Serial.write(R_intensity);
+  //Serial.write(ACTIVATE_CFI);
+  Serial.write((int) temp0);
+  Serial.write((int) temp1);
+  Serial.write((int) temp2);
+  Serial.write((int) temp3);
+  Serial.write((int) temp4);
+  Serial.write((int) temp5);
+  Serial.write((millis()- receive_time));
   Serial.write(flushed_bytes);
 }
 
@@ -172,17 +182,17 @@ int flush_serial() {
 // CONTROL FUNCTIONS
 
 
-void update_bed_peltier_control(int targetTemp, int objTemp, int pinA, int pinB) {
+void update_bed_peltier_control(float targetTemp, float objTemp, int pinA, int pinB) {
   // ONLY VALID FOR BED PELTIERS - SEE update_roof_peltier_control for roof control function
 
   bool PUMP_ON;
   bool HEAT_ON;
   
   float hotCutoff = targetTemp + 0.0;  // Offset from target temperature above which heating will stop
-  float coldCutoff = targetTemp - 0.25; // Offset from target temperature below which cooling will stop
+  float coldCutoff = targetTemp - 0.0; // Offset from target temperature below which cooling will stop
   // Triggers represent maximum and minimum acceptable temperatures for target
-  float hotTrigger = targetTemp - 0.75; // Offset from target temperature below which heating will start
-  float coldTrigger = targetTemp + 0.5; // Offset from target temperature above which cooling will start
+  float hotTrigger = targetTemp - 0.5; // Offset from target temperature below which heating will start
+  float coldTrigger = targetTemp + 1; // Offset from target temperature above which cooling will start
   
   float extremeHotLimit = 55.0;// Upper operating temp for peltier, above this it will shut down (e.g. thermal runaway)
   float hotLimit = 50.0; // Upper temperature limit for heating, peltier will not heat object beyond this limit
@@ -212,6 +222,18 @@ void update_bed_peltier_control(int targetTemp, int objTemp, int pinA, int pinB)
     PUMP_ON = false;
   }
 
+  /*
+  Serial.println(pinA);
+  Serial.print("PUMP ON: ");
+  Serial.println(PUMP_ON);
+  Serial.print("HEAT ON: ");
+  Serial.println(HEAT_ON);
+  Serial.print(objTemp);
+  Serial.print(", ");
+  Serial.println(targetTemp);
+  Serial.println();
+  */
+    
   if (PUMP_ON) {
     if (HEAT_ON) {
       digitalWrite(pinA, LOW);
@@ -233,9 +255,9 @@ void update_roof_peltier_control(int targetTemp, int objTemp, int plrPin) {
   // ONLY VALID FOR ROOF PELTIERS - SEE update_bed_peltier_control for bed control function
 
   bool PUMP_ON;
-  float coldCutoff = targetTemp - 0.25; // Offset from target temperature below which cooling will stop
+  float coldCutoff = targetTemp - 1; // Offset from target temperature below which cooling will stop
   // Trigger represents maximum acceptable temperatures for target
-  float coldTrigger = targetTemp + 0.5; // Offset from target temperature above which cooling will start
+  float coldTrigger = targetTemp + 1; // Offset from target temperature above which cooling will start
   
   float extremeHotLimit = 45.0;// Upper operating temp for peltier, above this it will shut down lights and peltier (e.g. thermal runaway)
   float coldLimit = -5.0; // Lower temperature limit for cooling, peltier will not cool object beyond this limit
@@ -413,6 +435,7 @@ void loop() {
 
   update_data();
   update_bed_peltier_control(target_temp, temp5, BED_PLR1A_PIN, BED_PLR1B_PIN);
+  update_bed_peltier_control(target_temp, temp5, BED_PLR2A_PIN, BED_PLR2B_PIN);
   update_roof_peltier_control(target_temp,temp0, ROOF_PLR_PIN);
   update_limit_switch();
   if (DOOR_CLOSED) {
@@ -420,7 +443,7 @@ void loop() {
   } else {
     analogWrite(BLUE_PIN, 255);
     analogWrite(IR_PIN, 255);
-    analogWrite(WHITE_PIN, 255);
+    analogWrite(WHITE_PIN, 220);
     analogWrite(RED_PIN, 255);
   }
   // update_display();
