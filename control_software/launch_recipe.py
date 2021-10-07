@@ -1,21 +1,24 @@
 from logging_utils import convert_recipe_line, create_new_dir, save_data, request_env_data, read_env_data
 from serial_utils import open_serial
-from image_capture.lepton_utils import LeptonCamera, LeptonError
 from picamera import PiCamera
 from time import sleep
 from datetime import datetime
 import os, sys
-
+import cv2
 
 def run(recipe):
 
     #recipe = "recipe_1.csv"
     read_path = "recipes/"
     start_time = None
+    save_path = None
+    dirname = ""
     picam = None
-    lepcam = LeptonCamera("image_capture/raw_imgs/", "recorded_data/")
     ser = open_serial("/dev/ttyACM0")
     ser_opened = datetime.now()
+    NIRCamera = cv2.VideoCapture(0)
+    NIRCamera.set(cv2.CAP_PROP_EXPOSURE, 100)
+    MIRCamera = cv2.VideoCapture(2)
     try:
         with open(read_path+recipe) as f:  # Open recipe file
             f.readline() # Skip first line containing headers
@@ -30,7 +33,6 @@ def run(recipe):
                     dirname = create_new_dir(save_path, dirname)  # Create new folder to put data in, and retrieve created folder name
                     os.makedirs(save_path + dirname + "/raw_data")
                     os.makedirs(save_path + dirname + "/processed_data")
-                    lepcam.set_img_dir(save_path+dirname + "/raw_data")
                     
                     headers = "time_logged, t_1, t_2, h_1, h_2, light"  # Headers of logfile
                     with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", "a") as datafile:  # Create new logfile
@@ -52,12 +54,6 @@ def run(recipe):
                             sleep(0.5)  # Let the white lights turn on
                             logtime = datetime.now()
                             logtimestr = logtime.strftime("%Y-%m-%d-%H_%M_%S")
-                            print("IR Image")
-                            try:
-                                #ir_image = lepcam.generate_img(img_name=f"IR{logtimestr}.png")
-                                pass
-                            except LeptonError:
-                                print("Lepton error")
                             if not picam:
                                 print("Delayed PiCamera created")
                                 picam = PiCamera(resolution=(3280,2464))
@@ -68,18 +64,17 @@ def run(recipe):
                                 rgb_image = picam.capture(f"{save_path}{dirname}/raw_data/RBG{logtimestr}.jpg")
                             except Exception as e:
                                 print("Picamera error:", e)
+                            ret, frame = NIRCamera.read()
+                            cv2.imwrite(f"{save_path}{dirname}/raw_data/NIR{logtimestr}.jpg")
+                            ret, frame = MIRCamera.read()
+                            cv2.imwrite(f"{save_path}{dirname}/raw_data/MIR{logtimestr}.jpg")
                             print("Close camera")
                             picam.close()
                             picam = None
                             # Save data
                             print("Save data")
-                            env_data[0] = logtime
+                            env_data.insert(0, logtime)
                             save_data(save_path, dirname, env_data)
-
-                        # Write data to cloud?
-                        concurrent_log = False
-                        if concurrent_log:
-                            push_to_cloud()# Maybe do at the end/in batches/in separate thread/with different program\batchfile?
                         print("Finished")
                         print("\n\n\n")
                         break  # Move to the next line
@@ -108,7 +103,8 @@ def run(recipe):
         if picam:
             picam.close()
         ser.close()
-        lepcam.clear_raw_dir()
+        NIRCamera.release()
+        MIRCamera.release()
         
 
 if __name__ == "__main__":

@@ -52,16 +52,17 @@ int R_intensity;
 bool ACTIVATE_CFI;
 
 
-int ml_intensity;
-int al_intensity;
-int al_duration;  // (s)
-int al_kaustki_duration;  // (s)
-int sp_intensity;
-int sp_duration;  // (10s of ms)
-int rf_intensity;  // Red flash intensity
-int rf_duration;  // Red flash duration (ms)
-int da_time;  // dark adjustment time (minutes)
-int sp_period;  // time between sps after AL reengaged (s)
+int ml_intensity = 247;
+int al_intensity = 240;
+int al_duration = 20;  // (s)
+int al_kaustki_duration = 10;  // (s)
+int sp_intensity = 230;
+int sp_duration = 60;  // (10s of ms)
+int rf_intensity = 245;  // Red flash intensity
+int rf_duration = 100;  // Red flash duration (ms)
+int da_time = 1;  // dark adjustment time (minutes)
+
+int sp_period = ;  // time between sps after AL reengaged (s)
 int sp_repeat_duration; // time for periodic SPs to continue
 
 
@@ -88,6 +89,18 @@ void update_data(){
   temp3 = read_temperature(TIC3_PIN);
   temp4 = read_temperature(TIC4_PIN);
   temp5 = read_temperature(TIC5_PIN);
+  Serial.print("Temperatures: ");
+  Serial.print(temp0);
+  Serial.print(", ");
+  Serial.print(temp1);
+  Serial.print(", ");
+  Serial.print(temp2);
+  Serial.print(", ");
+  Serial.print(temp3);
+  Serial.print(", ");
+  Serial.print(temp4);
+  Serial.print(", ");
+  Serial.print(temp5);
 }
 
 
@@ -103,6 +116,8 @@ bool update_limit_switch() {
   if (CURRENT_STATE != DOOR_CLOSED && (millis()-last_toggle) >= debounce_period){
     DOOR_CLOSED = CURRENT_STATE;  // Only read when value changes
     last_toggle = millis();  // To deal with debounce of the switch
+    Serial.print("Door closed: ");
+    Serial.println(DOOR_CLOSED);
   }
 }
 
@@ -341,7 +356,7 @@ void activate_CFI() {
         al_start = millis();
         CFI_state = 90;
 
-      case 90:  // Wait out until end of SP duration
+      case 90:  // Wait out until end of AL duration
         if ((unsigned long)(millis() - al_start) > (al_duration)) {
           analogWrite(BLUE_PIN, 255);
           CFI_state = 200; // Abort CFI procedure

@@ -10,9 +10,11 @@ def convert_recipe_line(line):
     1. time (%y-%m-%d-%H:%M:%S date)    - time to read this instruction
     2. log (Bool)                       - whether to log data for this instruction or just write conditions
     3. target_temp (int)                - temperature condition to write
-    4. R (int8)                         - Intensity of red light
-    5. Y (int8)                         - Intensity of yellow light
-    6. B (int8)                         - Intensity of blue light
+    4. B (int8)                         - Intensity of blue light
+    5. I (int8)                         - Intensity of IR light
+    6. W (int8)                         - Intensity of white light
+    7. R (int8)                         - Intensity of red light
+    8. trigger_CFI (bool)               - whether to trigger CFI or not
 
     """
     # Splits string into relevent variables (still as strings)
@@ -28,7 +30,9 @@ def convert_recipe_line(line):
                   int,
                   int,
                   int,
-                  int]
+                  int,
+                  int,
+                  lambda x: bool(int(x))]
 
     for i in range(len(data)):
         try:
@@ -74,52 +78,37 @@ def save_data(path, dirname, data):
 def format_data_string(env_data):
     """ Converts env_data (as a list) to a string to write to logfile
         
-    1. time of request (%y-%m-%d-%H:%M:%S date)     - time to read this instruction
-    2. target_temp (int)                            - temperature condition to write
-    3. R (int8)                                     - Intensity of red light
-    4. Y (int8)                                     - Intensity of yellow light
-    5. B (int8)                                     - Intensity of blue light
-    6. W (int)                                      - Intensity of white light
-    7. W_t (int)                                    - White timeout
-    8. current_temp_high (int)                      - Measured temperature of top sensor
-    9. current_temp_low (int)                       - Measured temperature of bottom sensor
-    10. current_humid_high (int)                    - Measured humidity of top sensor
-    11. current_humid_low (int)                     - Measured humidity of bottom sensor
-    12. light_level (int)                           - Measured light level
-    13. elapsed_time (int)                          - Time since receiving last bit of request and sending reply
-    14. dropped_bits (int)                          - Bits of message lost (ideally should always be 0...)
+    1. target_temp (int8)                            - temperature condition to write
+    2. B (int8)                                     - Intensity of red light
+    3. I (int8)                                     - Intensity of yellow light
+    4. W (int8)                                     - Intensity of blue light
+    5. R (int8)                                     - Intensity of white light
+    6. temp0  (int8)                                - Measured temperature 0
+    7. temp1  (int8)                                - Measured temperature 0
+    8. temp2  (int8)                                - Measured temperature 0
+    9. temp3  (int8)                                - Measured temperature 0
+    10. temp4  (int8)                               - Measured temperature 0
+    11. temp5  (int8)                               - Measured temperature 0
+    12. elapsed_time (int8)                         - Time since receiving last bit of request and sending reply
+    13. dropped_bits (int8)                         - Bits of message lost (ideally should always be 0...)
 
     """
 
     data_string = ""
 
-    if not (env_data[0] is None):
-        data_string += datetime.strftime(env_data[0], "%Y-%m-%d %H:%M:%S")
-    for i in range(7, len(env_data)-2):  # Record only time-of-request, and 8-12 inclusive
-        data_string += ", "
+    for i in range(len(env_data)):  # Record only time-of-request, and 8-12 inclusive
         if not(env_data[i] is None):
             data_string += str(env_data[i])
-    
+        data_string += ", "
+    data_string.strip(", ")
     return data_string
 
 
 def request_env_data(ser, request_data):
 
-    # Convert data to serializable form
-    formatted_data = request_data[:]
-    formatted_data[0] = formatted_data[0].strftime("%Y-%m-%d %H:%M:%S")
-    del formatted_data[1]  # Logging status not sent to arduino
-    if request_data[1]:  # A request accompanied by photos being taken (turn the white lights on)
-        formatted_data.append(254)  # Turn white light intensity to max
-        formatted_data.append(5)  # 5 seconds before white lights turn off again
-    else:
-        formatted_data.append(0)  # Turn white light intensity to 0
-        formatted_data.append(0)  # No light timeout needed
-
     # Send data
-    ser.write(formatted_data[0].encode("utf-8"))  # Send string request
-    for element in formatted_data[1:]:
-        if not (element is None):
+    for element in request_data[2:]:
+        if element is not None:
             ser.write(bytes([element]))  # Send int request
         else:
             ser.write(bytes([255]))  # Send alternative 1 byte
@@ -127,12 +116,11 @@ def request_env_data(ser, request_data):
 
 def read_env_data(ser):
     """Reads env_data from serial buffer and returns list of useful data"""
-    data_length = 32  # Expected number of bytes to be in buffer
-    env_bytes = ser.read(32)  # Timeout set when ser was initialised
+    data_length = 14  # Expected number of bytes to be in buffer
+    env_bytes = ser.read(data_length)  # Timeout set when ser was initialised
     env_data = []
     if len(env_bytes) > 0:
-        env_data.append(datetime.strptime(env_bytes[:19].decode("utf-8"), "%Y-%m-%d %H:%M:%S"))  # Read time/datestamp
-        env_data += [None if b == 255 else b for b in env_bytes[19:]]
+        env_data += [None if b == 255 else b for b in env_bytes]
     else:
         env_data = [None] * 13
 
