@@ -26,13 +26,13 @@ def convert_recipe_line(line):
 
     # List of conversion functions based on latest format
     conv_funcs = [lambda datestr: datetime.strptime(datestr, "%Y-%m-%d %H:%M:%S"),
-                  lambda x: bool(int(x)),
                   int,
                   int,
                   int,
                   int,
                   int,
-                  lambda x: bool(int(x))]
+                  int,
+                  int]
 
     for i in range(len(data)):
         try:

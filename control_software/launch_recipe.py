@@ -14,10 +14,11 @@ def run(recipe):
     save_path = None
     dirname = ""
     picam = None
-    ser = open_serial("/dev/ttyACM0")
+    #ser = open_serial("/dev/ttyACM0")
+    ser = open_serial("COM9", timeout=5)
     ser_opened = datetime.now()
     NIRCamera = cv2.VideoCapture(0)
-    NIRCamera.set(cv2.CAP_PROP_EXPOSURE, 100)
+    #NIRCamera.set(cv2.CAP_PROP_EXPOSURE, 100)
     MIRCamera = cv2.VideoCapture(2)
     try:
         with open(read_path+recipe) as f:  # Open recipe file
@@ -49,6 +50,7 @@ def run(recipe):
                             sleep(2-(datetime.now()-ser_opened).total_seconds())
                         request_env_data(ser, data)
                         env_data = read_env_data(ser)
+                        print(env_data)
                         if data[1]:
                             print("data1", data[1])
                             sleep(0.5)  # Let the white lights turn on
@@ -62,6 +64,7 @@ def run(recipe):
                             print("RGB Image")
                             try:
                                 rgb_image = picam.capture(f"{save_path}{dirname}/raw_data/RBG{logtimestr}.jpg")
+                                pass
                             except Exception as e:
                                 print("Picamera error:", e)
                             ret, frame = NIRCamera.read()
@@ -102,6 +105,7 @@ def run(recipe):
         # Tidy up everything
         if picam:
             picam.close()
+            pass
         ser.close()
         NIRCamera.release()
         MIRCamera.release()

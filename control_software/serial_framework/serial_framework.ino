@@ -62,7 +62,7 @@ int rf_intensity = 245;  // Red flash intensity
 int rf_duration = 100;  // Red flash duration (ms)
 int da_time = 1;  // dark adjustment time (minutes)
 
-int sp_period = ;  // time between sps after AL reengaged (s)
+int sp_period;  // time between sps after AL reengaged (s)
 int sp_repeat_duration; // time for periodic SPs to continue
 
 
@@ -78,7 +78,7 @@ int temp5;
 int read_temperature(int temp_pin) {
   // Reads temperature from Temperature IC
   int raw = analogRead(temp_pin);
-  return (raw - 2100.7)/(-10.791);  // Derived from least-squares fit (from excel) of LMT86 data between 0 and 40 degrees C
+  return (raw * (4860/1024) - 2100.7)/(-10.791);  // Derived from least-squares fit (from excel) of LMT86 data between 0 and 40 degrees C
 }
 
 void update_data(){
@@ -100,7 +100,7 @@ void update_data(){
   Serial.print(", ");
   Serial.print(temp4);
   Serial.print(", ");
-  Serial.print(temp5);
+  Serial.println(temp5);
 }
 
 
