@@ -14,11 +14,11 @@ def run(recipe):
     save_path = None
     dirname = ""
     picam = None
-    #ser = open_serial("/dev/ttyACM0")
-    ser = open_serial("COM9", timeout=5)
+    ser = open_serial("/dev/ttyACM0")
+    #ser = open_serial("COM9", timeout=5)
     ser_opened = datetime.now()
     NIRCamera = cv2.VideoCapture(0)
-    #NIRCamera.set(cv2.CAP_PROP_EXPOSURE, 100)
+    NIRCamera.set(cv2.CAP_PROP_EXPOSURE, 100)
     MIRCamera = cv2.VideoCapture(2)
     try:
         with open(read_path+recipe) as f:  # Open recipe file
@@ -60,6 +60,7 @@ def run(recipe):
                                 print("Delayed PiCamera created")
                                 picam = PiCamera(resolution=(3280,2464))
                                 picam.rotation = 90
+                                picam.exposure_compensation = -25
                                 sleep(2)
                             print("RGB Image")
                             try:
@@ -68,9 +69,9 @@ def run(recipe):
                             except Exception as e:
                                 print("Picamera error:", e)
                             ret, frame = NIRCamera.read()
-                            cv2.imwrite(f"{save_path}{dirname}/raw_data/NIR{logtimestr}.jpg")
+                            cv2.imwrite(f"{save_path}{dirname}/raw_data/NIR{logtimestr}.jpg", frame)
                             ret, frame = MIRCamera.read()
-                            cv2.imwrite(f"{save_path}{dirname}/raw_data/MIR{logtimestr}.jpg")
+                            cv2.imwrite(f"{save_path}{dirname}/raw_data/MIR{logtimestr}.jpg", frame)
                             print("Close camera")
                             picam.close()
                             picam = None

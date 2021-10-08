@@ -69,7 +69,7 @@ def save_data(path, dirname, data):
     """
     data_string = format_data_string(data)
     #print("log_string", data_string)
-
+    print("datastring ",data_string)
     with open(f"{path}{dirname}/raw_data/{dirname}.tmp", "a") as datafile:
         datafile.write(data_string + "\n")  # Write data with a newline character on the end
     #print(f"data saved to {path}{dirname}!")
