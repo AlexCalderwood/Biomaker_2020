@@ -1,25 +1,40 @@
 import cv2
 import picamera
 import picamera.array
+from flirpy.camera.lepton import Lepton
 import time
 from logging_utils import request_env_data, read_env_data
 from serial_utils import open_serial
 import numpy as np
 import os
+import re
 
 print("Starting test controller...")
 
-NIR_PORT = 2
-MIR_PORT = 0
+def get_camera(camera_name):
+    cam_num = None
+    for file in os.listdir("/sys/class/video4linux"):
+        real_file = os.path.realpath("/sys/class/video4linux/" + file + "/name")
+        if os.path.exists(real_file):
+            with open(real_file, "rt") as name_file:
+                name = name_file.read().rstrip()
+            if camera_name in name:
+                cam_num = int(re.search("\d+$", file).group(0))
+                return cam_num - 1
+        else:
+            return 2  # Lucky dip its probably 2
 
-RGB_ENABLED = True
+NIR_PORT = get_camera("USB 2.0 Camera")
+MIR_PORT = get_camera("PureThermal")
+
+RGB_ENABLED = False
 NIR_ENABLED = True
-MIR_ENABLED = False
+MIR_ENABLED = True
 
 NIR_exposure = 16
 start = time.time()
 
-
+fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')  # THIS MIGHT BE LOSSY!!!!!!!!!
 
 
 if NIR_ENABLED:
@@ -28,21 +43,19 @@ if NIR_ENABLED:
         raise IOError(f"Cannot open NIR camera on port {NIR_PORT}")
     NIRCamera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     NIRCamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-    fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-    videoWriter = cv2.VideoWriter('testvid.avi', fourcc, 12.0, (640, 480))
+    NIRvideoWriter = cv2.VideoWriter('testvid.avi', fourcc, 12.0, (640, 480))
 
     # For some reason this is essential (and takes ~0.5 seconds...)
     _, NIRimg = NIRCamera.read()  # Must be called beforehand ?? to actually set the exposure
-    os.system(f"v4l2-ctl -d 2 -c exposure_absolute={NIR_exposure}")
-    os.system(f"v4l2-ctl -d 2 -c exposure_absolute={NIR_exposure}")  # Must be set at least twice??
+    os.system(f"v4l2-ctl -d {NIR_PORT} -c exposure_absolute={NIR_exposure}")
+    os.system(f"v4l2-ctl -d {NIR_PORT} -c exposure_absolute={NIR_exposure}")  # Must be set at least twice??
     for x in range(5):  # Takes about 5 reads to sink in !!??!
         _, NIRimg = NIRCamera.read()
 
 
 if MIR_ENABLED:
-    MIRCamera = cv2.VideoCapture(MIR_PORT)
-    if not MIRCamera.isOpened():
-        raise IOError(f"Cannot open MIR camera on port {MIR_PORT}")
+    MIRCamera = Lepton()
+    #MIRvideoWriter = cv2.VideoWriter('MIRvid.avi', fourcc, 30.0, (160, 120))
 
 if RGB_ENABLED:
     picam = picamera.PiCamera(resolution=(3296,2464))
@@ -121,13 +134,17 @@ try:
             Nstart = time.time()
             _, NIRimg = NIRCamera.read()
             NIRimg = cv2.rotate(NIRimg, cv2.ROTATE_180)
-            videoWriter.write(NIRimg)
+            NIRvideoWriter.write(NIRimg)
             #print(time.time() - Nstart)
             cv2.imshow("NIR", NIRimg)
             #print(np.amax(NIRimg), time.time()-start)
 
         if MIR_ENABLED:
-            _, MIRimg = MIRCamera.read()
+            MIRimg = MIRCamera.grab(MIR_PORT)  # cv2 Video can only take 8-bit frames - could do maths to convert temp to 0-255
+            MIRvideoWriter.write(MIRimg)
+            #cv2.imwrite("MIRTest.png", MIRimg)
+            MIRimg = 255*((MIRimg - MIRimg.min())/(MIRimg.max()-MIRimg.min()))
+            MIRimg = MIRimg.astype(np.uint8)
             MIRimg = cv2.resize(MIRimg, None, fx=4, fy=4, interpolation=cv2.INTER_AREA)
             cv2.imshow("MIR", MIRimg)
         
@@ -199,7 +216,7 @@ finally:
     if NIR_ENABLED:
         NIRCamera.release()
     if MIR_ENABLED:
-        MIRCamera.release()
+        MIRCamera.close()
     cv2.destroyAllWindows()
     request_env_data(ser, ["2021-12-14 00:00:00", False, 20, 0, 0, 0, 0, False])
     ser.close()
