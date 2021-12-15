@@ -12,9 +12,9 @@ print("Starting test controller...")
 NIR_PORT = 2
 MIR_PORT = 0
 
-RGB_ENABLED = False
-NIR_ENABLED = False
-MIR_ENABLED = True
+RGB_ENABLED = True
+NIR_ENABLED = True
+MIR_ENABLED = False
 
 NIR_exposure = 16
 start = time.time()
@@ -26,10 +26,10 @@ if NIR_ENABLED:
     NIRCamera = cv2.VideoCapture(NIR_PORT)
     if not NIRCamera.isOpened():
         raise IOError(f"Cannot open NIR camera on port {NIR_PORT}")
-    NIRCamera.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
-    NIRCamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+    NIRCamera.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    NIRCamera.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
     fourcc = cv2.VideoWriter_fourcc('M', 'J', 'P', 'G')
-    videoWriter = cv2.VideoWriter('testvid.avi', fourcc, 12.0, (1920, 1080))
+    videoWriter = cv2.VideoWriter('testvid.avi', fourcc, 12.0, (640, 480))
 
     # For some reason this is essential (and takes ~0.5 seconds...)
     _, NIRimg = NIRCamera.read()  # Must be called beforehand ?? to actually set the exposure
@@ -69,7 +69,7 @@ data = conv_funcs = ["2021-12-14 00:00:00",
                   20,
                   0,
                   0,
-                  50,
+                  0,
                   0,
                   False]
 request_env_data(ser, data)
@@ -120,9 +120,10 @@ try:
         if NIR_ENABLED:
             Nstart = time.time()
             _, NIRimg = NIRCamera.read()
+            NIRimg = cv2.rotate(NIRimg, cv2.ROTATE_180)
             videoWriter.write(NIRimg)
-            print(time.time() - Nstart)
-            #cv2.imshow("NIR", NIRimg)
+            #print(time.time() - Nstart)
+            cv2.imshow("NIR", NIRimg)
             #print(np.amax(NIRimg), time.time()-start)
 
         if MIR_ENABLED:
@@ -131,8 +132,8 @@ try:
             cv2.imshow("MIR", MIRimg)
         
         if RGB_ENABLED:
-            print(picam.digital_gain, "d")
-            print(picam.analog_gain)
+            #print(picam.digital_gain, "d")
+            #print(picam.analog_gain)
             
             if not EXPOSURE_SET:
                 dgError = abs(picam.digital_gain - 1)
@@ -169,18 +170,18 @@ try:
         c = cv2.waitKey(1)
         if c == 27:     # ESC
             break
-        elif c == 10:   # RETURN
+        elif c == 13:   # RETURN
             if False:
                 brightness += 10
                 request_env_data(ser, ["2021-12-14 00:00:00", False, 20, 0, 0, brightness, 0, False])
                 print(brightness)
-            if False:
+            if True:
                 if blue:
-                    request_env_data(ser, ["2021-12-14 00:00:00", False, 20, 0, 54, 0, 0, False])
+                    request_env_data(ser, ["2021-12-14 00:00:00", False, 20, 250, 0, 0, 0, False])
                     print("blue")
                     blue = False
                 else:
-                    request_env_data(ser, ["2021-12-14 00:00:00", False, 20, 0, 0, 0, 54, False])
+                    request_env_data(ser, ["2021-12-14 00:00:00", False, 20, 0, 0, 0, 100, False])
                     print("red")
                     blue = True
             if False:
