@@ -40,6 +40,7 @@ int IR_PIN = 9;         // IR LED control pin (255 = OFF)
 int WHITE_PIN = 10;     // White LED control pin (255 = OFF)
 int RED_PIN = 11;       // Red LED control pin (255 = OFF)
 int ROOF_PLR_PIN = 12;  // Roof peltier control pin (HIGH = ON)
+int LED_POWER_PIN = 7; // 48V Powersupply relay (Normally-Open)
 
 
 // Definitions for target parameters
@@ -416,16 +417,18 @@ void setup() {
   pinMode(WHITE_PIN, OUTPUT);
   pinMode(RED_PIN, OUTPUT);
   pinMode(ROOF_PLR_PIN, OUTPUT);
+  pinMode(LED_POWER_PIN, OUTPUT);
 
   digitalWrite(BED_PLR1A_PIN, LOW);
   digitalWrite(BED_PLR1B_PIN, LOW);
   digitalWrite(BED_PLR2A_PIN, LOW);
   digitalWrite(BED_PLR2B_PIN, LOW);
-  pinMode(BLUE_PIN, 255);
-  pinMode(IR_PIN, 255);
-  pinMode(WHITE_PIN, 255);
-  pinMode(RED_PIN, 255);
+  analogWrite(BLUE_PIN, 255);
+  analogWrite(IR_PIN, 255);
+  analogWrite(WHITE_PIN, 255);
+  analogWrite(RED_PIN, 255);
   digitalWrite(ROOF_PLR_PIN, LOW);
+  digitalWrite(LED_POWER_PIN, HIGH);
 
   Serial.begin(9600);
 }
