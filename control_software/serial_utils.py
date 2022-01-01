@@ -1,7 +1,7 @@
 import serial
-import datetime
-from time import sleep
-import datetime
+
+
+############# SERIAL DATA HANDLING #######################
 
 
 def open_serial(port, baudrate=9600, timeout=1):
@@ -12,130 +12,56 @@ def open_serial(port, baudrate=9600, timeout=1):
     return ser
 
 
-def generate_rpi_request(data):
-    """DEPRECIATED - REPLACED BY MODIFICATIONS TO REQUEST_ENV_DATA"""
-    """ Converts data (as a list) to binary to send to arduino
-    
-    1. time (%y-%m-%d-%H:%M:%S date) (19)  - time to read this instruction
-    2. log (Bool) (0 - not sent)                  - whether to log data for this instruction or just write conditions
-    3. target_temp (int) (2)               - temperature condition to write
-    4. R (int8) (3)                        - Intensity of red light
-    5. Y (int8) (3)                        - Intensity of yellow light
-    6. B (int8) (3)                        - Intensity of blue light
-    7. W (int8)  (3)                        - Intensity of white light (only high if picture is being taken)
-    8. W_timeout (int) (1)                 - Time for white light to be on (to avoid having to send another request)
-
+def send_request(ser, request_data):
+    """ Sends list of UNSIGNED integers via serial, least-significant-byte first
     """
 
-    rpi_request = ""
-
-    expected_lengths = [19,2,3,3,3]  # Expected length of data if it needs replacing with '?'
-
-    if not (data[0] is None):
-        rpi_request += datetime.datetime.strftime(data[0], "%Y-%m-%d %H:%M:%S")
-    else:
-        rpi_request += "?" * expected_lengths[0]
-    
-    for i in range(2, len(data)):  # From 2 to skip time and logging fields
-        rpi_request += ", "
-        if not(data[i] is None):
-            rpi_request += str(data[i])  # Call corresponding function on ith element
+    # Send data
+    for element in request_data:
+        if element is not None:
+            while element > 255:         # While there is more than one byte left to send
+                element, next_smallest_byte = divmod(element, 256)      # Divide by 256 to get dividend (MSBytes) and remainder (LSByte)
+                ser.write(bytes([next_smallest_byte]))
+            ser.write(bytes([element]))  # Send int request
         else:
-            rpi_request += "?" * expected_lengths[i]  # Replace any uninterpreted data with '???' to maintain byte-count
-
-    if data[1]:  # A request accompanied by photos being taken (turn the white lights on)
-        rpi_request += ", 255"  # Turn white light intensity to max
-        rpi_request += ", 5"  # 5 seconds before white lights turn off again
-    else:
-        rpi_request += ", 000"  # Turn white light intensity to max
-        rpi_request += ", 0"  # 5 seconds before white lights turn off again
-
-    return rpi_request
+            ser.write(bytes([255,255]))  # Send alternative two bytes
 
 
-def read_serial_data(ser, timeout=10):
-    """ Look for serial data in the buffer
+def read_buffer(ser):
+    """Reads data from serial buffer and returns list of unsigned 16-bit integers
     """
-    read_start = datetime.datetime.now()
-    ser_bytes = ser.readline()  # Read request
-    while len(ser_bytes) <= 0 and (datetime.datetime.now()-read_start).total_seconds() < timeout:
-        ser_bytes = ser.readline()
-        print("Nothing yet")
-    if len(ser_bytes) > 0:  # If any data have been received
-        return ser_bytes.decode("utf-8")  # Decode the data from binary
+    received_data = []
+    reply_lengths = [                                                   # Excluding primary key (PK) at start of each message
+        # 0. Set lights, [et, dB]
+        2,
+        # 1. Set temperature, [et, dB]
+        2,
+        # 2. Read temperature, [T0, T1, T2, T3, T4, T5, et, dB]
+        8,
+        # 3. Set CFI procedure, [et, dB]
+        2,
+        # 4. Trigger CFI, [et, dB]
+        2,
+        # 5. Enable/disable LEDs, [et, dB]
+        2,
+        # 6. Enable/disable bed-peltiers, [et, dB]
+        2
+    ]
+    nextBytes = ser.read(2)
+    if len(nextBytes) == 2:                         # If first 16-bit int has been received
+        pk = int.from_bytes(nextBytes, "little")    # Decode first int, the PK of the response
     else:
-        return "No data"
-
-
-def convert_env_string(env_string):
-    """ Converts reply from arduino (string) to a list of relevent types according to latest format
+        return None                                 # Message has not been received
     
-    1. time of request (%y-%m-%d-%H:%M:%S date)     - time to read this instruction
-    2. target_temp (int)                            - temperature condition to write
-    3. R (int8)                                     - Intensity of red light
-    4. Y (int8)                                     - Intensity of yellow light
-    5. B (int8)                                     - Intensity of blue light
-    6. W (int)                                      - Intensity of white light
-    7. W_t (int)                                    - White timeout
-    8. current_temp_high (int)                      - Measured temperature of top sensor
-    9. current_temp_low (int)                       - Measured temperature of bottom sensor
-    10. current_humid_high (int)                    - Measured humidity of top sensor
-    11. current_humid_low (int)                     - Measured humidity of bottom sensor
-    12. light_level (int)                           - Measured light level
-    13. elapsed_time (int)                          - Time since receiving last bit of request and sending reply
-    14. dropped_bits (int)                          - Bits of message lost (ideally should always be 0...)
+    for x in range(reply_lengths[pk-1]):
+        nextBytes = ser.read(2)                     # Read next 16-bit int
+        if len(nextBytes) == 2:                     # If next 16-bit int has been received
+            nextInt = int.from_bytes(ser.read(2), "little") # Translate bytes
+            if nextInt == 65535:
+                received_data.append(None)                  # 65355 is reserved value meaning erroneous value
+            else:
+                received_data.append(nextInt)
+        else:
+            received_data.append(None)              # Two bytes were not received
 
-    """
-    # Splits string into relevent variables (still as strings)
-    env_data = env_string.split(", ")
-
-    # List of conversion functions based on latest format
-    conv_funcs = [lambda datestr: datetime.datetime.strptime(datestr, "%Y-%m-%d %H:%M:%S"),
-                  int,
-                  int,
-                  int,
-                  int,
-                  int,
-                  float,
-                  float,
-                  float,
-                  float,
-                  float,
-                  float,
-                  float,
-                  float]
-
-    for i in range(len(env_data)):
-        try:
-            env_data[i] = conv_funcs[i](env_data[i])  # Call corresponding function on ith element
-        except ValueError:
-            print("Failed to convert", env_data[i], "position", i)
-            env_data[i] = None  # Any corrupt data is assigned None
-            continue  # Carry on converting rest of data
-    return env_data
-
-
-def run():
-
-    ser = open_serial("COM4")
-
-    while True:
-        try:
-            input()
-
-            package = "2021-03-17 22:21:00, 25, 125, 125, 125, 255, 5"#generate_rpi_request(data=", H")
-            ser.write(package.encode("utf-8"))  # Send request as the time
-            print("Request sent at", datetime.datetime.now().strftime("%H:%M:%S"))
-            ser_bytes = read_serial_data(ser)
-            print(ser_bytes)
-
-        except Exception as e:
-            print(e)
-            print("Keyboard Interrupt")
-            ser.close()
-            break
-
-
-#if __name__ == "__main__":
-    
-    #run()
+    return received_data
