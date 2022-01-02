@@ -52,7 +52,7 @@ def run(recipe):
                         # Check serial is functioning
                         time_since_ser = (datetime.now() - ser_opened).seconds  # Record time since ser was opened
                         if time_since_ser < 2.5:
-                            sleep(2.5-time_since_ser)   # Sleep until at least 2.5 seconds have elapsed since ser was opened
+                            sleep(2.5 - time_since_ser)   # Sleep until at least 2.5 seconds have elapsed since ser was opened
                         
                         # Enable LEDs
                         send_request(ser, [6, 1])
@@ -116,31 +116,34 @@ def run(recipe):
                             elif data[1] == 7:  # Enable/disable bed peltiers
                                 send_request(ser, data[1:])
                                 reply = read_reply(ser)
-                            elif data[1] == 8:  # Take RGB image
+                            elif data[1] == 8:  # Read stored CFI recipe
+                                send_request(ser, data[1:])
+                                reply = read_reply(ser)
+                            elif data[1] == 9:  # Take RGB image
                                 RGBtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
                                 RGBimg = np.empty((2464, 3296, 3), dtype=np.uint8)
                                 try:
                                     picam.capture(RGBimg, 'bgr')
                                 except Exception as e:
                                     print("Picamera error:", e)
-                            elif data[1] == 9:  # Take NIR image
+                            elif data[1] == 10:  # Take NIR image
                                 NIRtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
                                 _, NIRimg = NIRCamera.read()
                                 NIRimg = cv2.rotate(NIRimg, cv2.ROTATE_180)
-                            elif data[1] == 10:  # Take MIR image
+                            elif data[1] == 11:  # Take MIR image
                                 MIRtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
                                 MIRimg = MIRCamera.grab(MIR_PORT)
-                            elif data[1] == 11:  # Save latest RGB image
+                            elif data[1] == 12:  # Save latest RGB image
                                 cv2.imwrite(f"{save_path}{dirname}/raw_data/RBG{RGBtimestr}.jpg", RGBimg)
-                            elif data[1] == 12:  # Save latest NIR image
+                            elif data[1] == 13:  # Save latest NIR image
                                 cv2.imwrite(f"{save_path}{dirname}/raw_data/NIR{NIRtimestr}.jpg", NIRimg) 
-                            elif data[1] == 13:  # Save latest MIR image
+                            elif data[1] == 14:  # Save latest MIR image
                                 cv2.imwrite(f"{save_path}{dirname}/raw_data/MIR{MIRtimestr}.jpg", MIRimg)
-                            elif data[1] == 14:  # Take RGB video
+                            elif data[1] == 15:  # Take RGB video
                                 pass
-                            elif data[1] == 15:  # Take NIR video
+                            elif data[1] == 16:  # Take NIR video
                                 pass
-                            elif data[1] == 16:  # Take MIR video
+                            elif data[1] == 17:  # Take MIR video
                                 pass
                             break  # Move onto next line of file
                         elif time_to_wait < 3:  # Start 'high-speed' polling at t-3 seconds
@@ -274,7 +277,7 @@ def old_run(recipe):
         ser.close()
         NIRCamera.release()
         MIRCamera.release()
-        
+    
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

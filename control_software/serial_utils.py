@@ -57,7 +57,9 @@ def read_reply(ser):
         # 6. Enable/disable LEDs, [et, dB]
         2,
         # 7. Enable/disable bed-peltiers, [et, dB]
-        2
+        2,
+        # 8. Read stored CFI recipe [recipe, et, dB]
+        502
     ]
     nextBytes = ser.read(2)
     if len(nextBytes) == 2:                         # If first 16-bit int has been received
@@ -70,6 +72,7 @@ def read_reply(ser):
         received_data = [None]
         incomingInts = 2                           # If arduino has received erroneous PK, will still reply [et,dB] (this is its own unique reply, but no corresponding request)
     else:
+        print("PK", pk)
         incomingInts = reply_lengths[pk]
     for x in range(incomingInts):
         nextBytes = ser.read(2)                     # Read next 16-bit int
@@ -86,24 +89,26 @@ def read_reply(ser):
 
 
 def run():
-    ser = open_serial("/dev/ttyACM0")
+    ser = open_serial("COM5")
     time.sleep(2)
     try:
         # Send request
-        #print("sent:", send_request(ser, [6, 1]))
-        #print(read_reply(ser))
-        #print("sent:", send_request(ser, [4, 2, 0,0,0,100,1000, 0,0,0,100,2000]))# + [0,0,0,0,0]*94))
-        #print(read_reply(ser))
-        #time.sleep(1)
-        #print("sent:", send_request(ser, [5, 1]))
-        #print(read_reply(ser))
-        print("sent:", send_request(ser, [6, 0]))
+        print("sent:", send_request(ser, [6, 1]))
         print(read_reply(ser))
-
+        print("sent:", send_request(ser, [4, 5, 0,0,0,100,1000, 0,0,100,0,2000, 0,0,0,100,2000, 0,0,100,0,3000, 0,0,0,100,2000]))# + [0,0,0,0,0]*94))
+        print(read_reply(ser))
+        time.sleep(1)
+        
+        print("sent:", send_request(ser, [5, 1]))
+        print(read_reply(ser))
+        #print("sent:", send_request(ser, [6, 0]))
+        #print(read_reply(ser))
+        #print("sent:", send_request(ser, [8]))
+        #print(read_reply(ser))
         # Read diagnostics
-        print("Diagnostics")
-        send_request(ser, [0])
-        print(read_reply(ser))
+        #print("Diagnostics")
+        #send_request(ser, [0])
+        #print(read_reply(ser))
     finally:
         ser.close()
 

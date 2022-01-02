@@ -138,7 +138,7 @@ unsigned long last_received;  // Time most recent byte was received
 int serial_timeout = 500;  // Time until message is presumed dead and buffer (data array) is emptied
 int flushed_bytes = 0;
 
-int request_lengths[8] = {  // Length of each message, excluding PK at start of each message
+int request_lengths[9] = {  // Length of each message, excluding PK at start of each message
   // 0. Read diagnostics, []
   0,
   // 1. Set lights, [Blue, IR, White, Red]
@@ -154,6 +154,8 @@ int request_lengths[8] = {  // Length of each message, excluding PK at start of 
   // 6. Enable/disable LEDs, [enable/disable]
   1,
   // 7. Enabled/disable bed peltiers, [enable/disable]
+  1,
+  // 8. Read CFI_recipe
   1
 };
 
@@ -264,6 +266,8 @@ void interpret_request() {
     case 7:  //Enabled/disable bed peltiers [PK, enable/disable]
       if (request[1] != 65535) ENABLE_BPLRs = request[1];
       break;
+    case 8:
+      break;
   }
 }
 
@@ -307,6 +311,10 @@ void send_reply() {
       break;
     case 7:  //Enabled/disable bed peltiers [PK, enable/disable]
       break;
+    case 8:
+      for (int i=0; i<(sizeof(CFI_recipe)/sizeof(CFI_recipe[0]));i++){
+        writeInt16(CFI_recipe[i]);
+      }
   }
   unsigned long ul_elapsed_time = (unsigned long) (millis() - receive_time);      // Do this on different line to constrain (see docs)
   unsigned int elapsed_time = constrain(ul_elapsed_time, 0, 65535);               // Avoid overflows
@@ -482,7 +490,6 @@ void activate_CFI() {
   /*  Function to enact any fast-changing procedures that the Pi may not be able to communicate in time, e.g. quick pulses in CFI. The procedure must be written into CFI_recipe in advance.
    *  CFI_recipe has a maximum of 100 states, each with a max duration of 65545ms. Therefore a recipe can last at most 6554.5s, or ~1h50 minutes
    */
-
    if (CFI_state == -1) {                                               // During first iteration
     CFI_start = millis();                                               // Record start time
     old_B = B_intensity;                                                // Save state of lights
@@ -490,25 +497,24 @@ void activate_CFI() {
     old_W = W_intensity;
     old_R = R_intensity;
    }
-  if (CFI_state < (CFI_instructions-1)) {                               // While there are instructions still to complete (CFI might not use all 500)
-    if ((unsigned long) (millis()-CFI_start) >= next_change) {           // If the state needs to change
+  if ((unsigned long) (millis()-CFI_start) >= next_change) {            // If the state needs to change
+    if (CFI_state < (CFI_instructions-1)) {                             // While there are instructions still to complete (CFI might not use all 500)
       CFI_state += 1;                                                   // Move to new state
       B_intensity = interpret_LED_intensity(CFI_recipe[(CFI_state*5)]);                          // Update lights
       I_intensity = interpret_LED_intensity(CFI_recipe[(CFI_state*5) + 1]);
       W_intensity = interpret_LED_intensity(CFI_recipe[(CFI_state*5) + 2]);
       R_intensity = interpret_LED_intensity(CFI_recipe[(CFI_state*5) + 3]);
-      next_change += CFI_recipe[(CFI_state*5) + 4];                     // Add on duration of next state onto time until change
-      
+      next_change += CFI_recipe[(CFI_state*5) + 4];                       // Add on duration of next state onto time until change
+    } else {                                                              // Time has run out on last instruction
+      ACTIVATE_CFI = 0;                                                   // End CFI
+      CFI_start = 0;                                                      // Reset all variables 
+      next_change = 0;
+      CFI_state = -1;
+      B_intensity = old_B;                                                // Revert lights to original state
+      I_intensity = old_I;
+      W_intensity = old_W;
+      R_intensity = old_R;
     }
-  } else {                                                              // No more instructions to complete
-    ACTIVATE_CFI = 0;                                                   // End CFI
-    CFI_start = 0;                                                      // Reset all variables 
-    next_change = 0;
-    CFI_state = -1;
-    B_intensity = old_B;                                                // Revert lights to original state
-    I_intensity = old_I;
-    W_intensity = old_W;
-    R_intensity = old_R;
   }
 }
 
