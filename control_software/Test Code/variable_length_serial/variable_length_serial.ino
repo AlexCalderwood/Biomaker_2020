@@ -41,23 +41,28 @@ int writeInt16(int input) {
 }
 
 unsigned int input = 0;
+byte count = 0;
+//unsigned int request[6] = {65355, 65355, 65355, 65355, 65355, 6535}
 
 void loop() {
   if (Serial.available() > 1) {           // Check for both bytes of 16-bit int to arrive before reading, otherwise reads two separate bytes into two 16-bit ints
     // Read UInt from the serial buffer
     input = parseUInt();
-
+    //Serial.print(input);
     // Check that number is successfully converted to denery
-    input -= 1;
-    input = input / 2;
-
+    //input -= 1;
+    //input = input / 2;
+    //count += 1;
     // Send back number after checks
     int written = writeInt16(input);
-    Serial.write(written);
+    //Serial.write(written);
 
     // Clear the remaining buffer
-    while (Serial.available() > 0) {
-      Serial.read();
-    }
+    //if (Serial.peek() == 13) {            // 13 = \r = newline character
+    //  while (Serial.available() > 0) {    // Flush out any remaining serial
+    //    Serial.read();
+    //  }
+    //}
   }
+  
 }

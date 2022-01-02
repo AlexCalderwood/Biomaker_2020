@@ -1,25 +1,25 @@
-/* 
- *  Serial Framework
- *  
- *  Features:
- *  4-channel light control
- *  Limit switch safety
- *  6 temperature sensors
- *  Simple overhead peltier control
- *  Advanced 2-channel bed peltier control
- *  serial comnmunication with Raspberry Pi
- *  Display live data to touch screen(?)
- *  
- *  Process:
- *  Repeatedly log temperatures
- *  Adjust peltier operation to achieve target temperatures
- *  Check limit-switch status
- *  Set light parameters
- *  Send data to touchscreen(?)
- *  Run fluorescence if necessary(?)
- *  Wait for request from pi
- *  Respond to request from pi
- */
+/*
+    Serial Framework
+
+    Features:
+    4-channel light control
+    Limit switch safety
+    6 temperature sensors
+    Simple overhead peltier control
+    Advanced 2-channel bed peltier control
+    serial comnmunication with Raspberry Pi
+    Display live data to touch screen(?)
+
+    Process:
+    Repeatedly log temperatures
+    Adjust peltier operation to achieve target temperatures
+    Check limit-switch status
+    Set light parameters
+    Send data to touchscreen(?)
+    Run fluorescence if necessary(?)
+    Wait for request from pi
+    Respond to request from pi
+*/
 
 
 // Pin definitions
@@ -30,10 +30,10 @@ int TIC2_PIN = A2;      // Bed TIC
 int TIC3_PIN = A3;      // Bed TIC
 int TIC4_PIN = A4;      // Bed TIC
 int TIC5_PIN = A5;      // Bed TIC
-int BED_PLR1A_PIN = 2;  // Bed PLR 1 pin A
-int BED_PLR1B_PIN = 1;  // Bed PLR 1 pin B
-int BED_PLR2A_PIN = 4;  // Bed PLR 2 pin A
-int BED_PLR2B_PIN = 3;  // Bed PLR 2 pin B
+int BED_PLR1A_PIN = 1;  // Bed PLR 1 pin A (Right, cold)
+int BED_PLR1B_PIN = 2;  // Bed PLR 1 pin B (Right, hot)
+int BED_PLR2A_PIN = 3;  // Bed PLR 2 pin A (Left, cold)
+int BED_PLR2B_PIN = 4;  // Bed PLR 2 pin B (Left, hot)
 int BLUE_PIN = 6;       // Blue LED control pin (255 = OFF)
 int LS_PIN = 8;         // Limit switch pin
 int IR_PIN = 9;         // IR LED control pin (255 = OFF)
@@ -50,22 +50,9 @@ int B_intensity = 255;
 int I_intensity = 255;
 int W_intensity = 255;
 int R_intensity = 255;
-bool ACTIVATE_CFI = false;
-
-
-int ml_intensity = 240;
-int al_intensity = 230;
-int al_duration = 20;  // (s)
-int al_kaustki_duration = 10;  // (s)
-int sp_intensity = 200;
-int sp_duration = 60;  // (10s of ms)
-int rf_intensity = 210;  // Red flash intensity
-int rf_duration = 100;  // Red flash duration (ms)
-int da_time = 1;  // dark adjustment time (minutes)
-
-int sp_period;  // time between sps after AL reengaged (s)
-int sp_repeat_duration; // time for periodic SPs to continue
-
+int ACTIVATE_CFI = 0;
+int ENABLE_LEDs = 0;            // Controls mains relay for LEDs
+int ENABLE_BPLRs = 0;           // Controls bed-peltiers (forces them into 'off' state if false)
 
 // Definitions for measured parameters
 
@@ -76,35 +63,34 @@ float temp3;
 float temp4;
 float temp5;
 
-float read_temperature(int temp_pin) {
-  // Reads temperature from Temperature IC
-  float raw = analogRead(temp_pin);
-  float millivolts = raw * 5000 / 1024;
-  float temp = (millivolts - 2100.7)/(-10.791);  // Derived from least-squares fit (from excel) of LMT86 data between 0 and 40 degrees C
-  return temp;  // Derived from least-squares fit (from excel) of LMT86 data between 0 and 40 degrees C
+float read_temperature(int TIC_PIN, float Vref = 5.00, float m = -2.28, float c = 442.0) {
+  int raw_input = analogRead(TIC_PIN);
+  float temperature = (raw_input - c) / m;
+  return temperature;
+
 }
 
-void update_data(){
+void update_data() {
   // Amalgamates data from all local sensors
-  temp0 = read_temperature(TIC0_PIN);
-  temp1 = read_temperature(TIC1_PIN);
-  temp2 = read_temperature(TIC2_PIN);
-  temp3 = read_temperature(TIC3_PIN);
-  temp4 = read_temperature(TIC4_PIN);
-  temp5 = read_temperature(TIC5_PIN);
+  temp0 = read_temperature(TIC0_PIN, 4.98);
+  temp1 = read_temperature(TIC1_PIN, 4.98);
+  temp2 = read_temperature(TIC2_PIN, 4.98);
+  temp3 = read_temperature(TIC3_PIN, 4.98);
+  temp4 = read_temperature(TIC4_PIN, 4.98);
+  temp5 = read_temperature(TIC5_PIN, 4.98);
   /*
-  Serial.print("Temperatures: ");
-  Serial.print(temp0);
-  Serial.print(", ");
-  Serial.print(temp1);
-  Serial.print(", ");
-  Serial.print(temp2);
-  Serial.print(", ");
-  Serial.print(temp3);
-  Serial.print(", ");
-  Serial.print(temp4);
-  Serial.print(", ");
-  Serial.println(temp5);
+    Serial.print("Temperatures: ");
+    Serial.print(temp0);
+    Serial.print(", ");
+    Serial.print(temp1);
+    Serial.print(", ");
+    Serial.print(temp2);
+    Serial.print(", ");
+    Serial.print(temp3);
+    Serial.print(", ");
+    Serial.print(temp4);
+    Serial.print(", ");
+    Serial.println(temp5);
   */
 }
 
@@ -118,7 +104,7 @@ unsigned long last_toggle;
 bool update_limit_switch() {
   int debounce_period = 50;  //ms
   CURRENT_STATE = digitalRead(LS_PIN);
-  if (CURRENT_STATE != DOOR_CLOSED && (millis()-last_toggle) >= debounce_period){
+  if (CURRENT_STATE != DOOR_CLOSED && (millis() - last_toggle) >= debounce_period) {
     DOOR_CLOSED = CURRENT_STATE;  // Only read when value changes
     last_toggle = millis();  // To deal with debounce of the switch
     //Serial.print("Door closed: ");
@@ -129,46 +115,202 @@ bool update_limit_switch() {
 
 // Definitions for serial communication
 
-int received_bytes;
-byte incomingByte;
+//#################################### REQUEST AND REPLY SPECIFIC INFO ##########################
+/*
+   When adding a new request/reply:
+   1. Add length (excluding pk) to request_lengths
+   2. Make sure request array is long enough to hold new request
+   3. Add new case to interpret_request
+   4. Add new reply to send_reply
+   5. Update RPI reply_lengths
+*/
+
+int request_lengths[8] = {  // Length of each message, excluding PK at start of each message
+  // 0. Read diagnostics
+  0,
+  // 1. Set lights, [Blue, IR, White, Red]
+  4,
+  // 2. Set temperature, [T]
+  1,
+  // 3. Read temperature, []
+  0,
+  // 4. Set CFI procedure [instructions, 500]
+  501,
+  // 5. Trigger CFI [yes/no]
+  1,
+  // 6. Enable/disable LEDs [enable/disable]
+  1,
+  // 7. Enabled/disable bed peltiers [enable/disable]
+  1
+};
+
+
+// Request is initialised as 65535 which is overwritten as correct data comes in, or not if the request times out
+unsigned int request[5] = {65535, 65535, 65535, 65535, 65535};
+unsigned int CFI_recipe[500];
+int received_ints = 0;
+int expected_ints = 1;
 unsigned long receive_time;
 unsigned long last_received;  // Time most recent byte was received
 int serial_timeout = 500;  // Time until message is presumed dead and buffer (data array) is emptied
-int flushed_bytes;
-byte request[6] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
-// Request is initialised as 255 which is overwritten as correct data comes in, or not if the request times out
+int flushed_bytes = 0;
 
-void interpret_request(){
-  if (request[0] != 0xFF) target_temp = (int) request[0];
-  if (request[1] != 0xFF) B_intensity = 255 - (int) request[1];
-  if (request[2] != 0xFF) I_intensity = 255 - (int) request[2];
-  if (request[3] != 0xFF) W_intensity = 255 - (int) request[3];
-  if (request[4] != 0xFF) R_intensity = 255 - (int) request[4];
-  if (request[5] != 0xFF) ACTIVATE_CFI = (bool) request[5];
+
+int parseUInt() {
+  /*
+      Function to read 16-bit UNSIGNED integers from buffer.
+      If only a single byte is received, the most-significant byte is assumed to be 0
+      If no bytes are in the buffer, returns -1
+  */
+  int firstByte = Serial.read();      // Read as integers to obtain possible -1 from read()
+  int secondByte = Serial.read();
+  if (secondByte == -1) {
+    secondByte = 0;                   // If most-significant byte is missing, set to 0
+  }
+  if (firstByte == -1) {
+    return -1;                        // If least-significant byte is missing (i.e. no bytes in buffer), abort
+  }
+  unsigned int combined = (byte) secondByte;        // Set MSB as first 8 bits of combined
+  combined = (combined << 8) | ((byte) firstByte);  // Shift MSB right, and or with LSB
+  return combined;
 }
 
-void send_ack() {
-  Serial.write(request, sizeof(request));
-  //Serial.write(target_temp);
-  //Serial.write(B_intensity);
-  //Serial.write(I_intensity);
-  //Serial.write(W_intensity);
-  //Serial.write(R_intensity);
-  //Serial.write(ACTIVATE_CFI);
-  Serial.write((int) temp0);
-  Serial.write((int) temp1);
-  Serial.write((int) temp2);
-  Serial.write((int) temp3);
-  Serial.write((int) temp4);
-  Serial.write((int) temp5);
-  Serial.write((millis()- receive_time));
-  Serial.write(flushed_bytes);
+
+int writeInt16(int input) {
+  /*
+     Function to write 16-bit integers to Serial
+     Bytes are written from least to most significant
+  */
+
+  byte firstByte = input & 255;           //   255 = 00000000 11111111
+  byte secondByte = (input >> 8) & 255;   //  Isolate most-significant byte
+  int written = 0;
+  written += Serial.write(firstByte);     // Serial.write returns number of bytes written
+  written += Serial.write(secondByte);    // In this case should always return 1
+  return written;                         // Return number of bytes written
 }
+
+
+int read_request() {
+  /*
+     Reads from buffer any request the Pi may send, and writes it as integers to *request* array
+  */
+
+  if (received_ints == expected_ints and received_ints > 0) {                 // A non-zero message is fully received
+    return 1;
+
+  } else if (received_ints > 0 and ((unsigned long)(millis() - last_received)) > serial_timeout) {
+    received_ints = expected_ints;                                          // Jump to the processing, assume nothing else is coming
+
+  } else if (Serial.available() > 1) {                                        // If at least one 16-bit int has been received
+    if (request[0] == 4 and received_ints > 2) {                              // If CFI procedure (PK=4) is being set, and PK + instructions have arrived
+      CFI_recipe[received_ints - 2] = parseUInt();                            // Save data to the CFI_recipe array instead
+    } else {
+      request[received_ints] = parseUInt();                                   // Insert the new int into the request array (any error in receiving is read as 65535 (error state))
+    }
+    last_received = millis();
+    received_ints += 1;                                                       // Update number of ints received
+
+    if (received_ints == 1) {                                                 // If this is the first int of a new message (the PK)
+      receive_time = last_received;                                         // Note time of arrival of first int
+      if (request[0] == 65535 or request[0] >= (sizeof(request_lengths)/sizeof(request_lengths[0]))) {     // If error occured receiving PK
+        request[0] = 65535;
+        expected_ints = 1;                                                    // Abort rest of message
+      } else {
+        expected_ints = request_lengths[request[0]] + 1;                      // Choose the correct request length based on the PK just received
+      }
+    }
+  }
+  return 0;                                                                   // No full message has been received
+}
+
+
+int interpret_LED_intensity(int brightness) {
+  /*
+     Takes in Uint (0-255, 0 is off, 255 is bright), and returns value LEDs will use (programmatically, 255 is off, 0 is bright)
+  */
+  brightness = constrain(brightness, 0, 255);    // Limit values between 0 and 255
+  return 255 - brightness;                        // Convert user value to programmatic value
+}
+
+void interpret_request() {
+  switch (request[0]) {
+    case 0:  //Read diagnostics
+      break;
+    case 1:  //Set lights, [PK, Blue, IR, White, Red]
+      if (request[1] != 65535) B_intensity = interpret_LED_intensity(request[1]);
+      if (request[2] != 65535) I_intensity = interpret_LED_intensity(request[2]);
+      if (request[3] != 65535) W_intensity = interpret_LED_intensity(request[3]);
+      if (request[4] != 65535) R_intensity = interpret_LED_intensity(request[4]);
+      break;
+    case 2:  //Set temperature, [PK, T]
+      if (request[1] != 65535) target_temp = ((float) request[1]) / 10.0;
+      break;
+    case 3:  //Read temperature, [PK]
+      break;
+    case 4:  //Set CFI procedure [PK, instructions, 500]
+      break;
+    case 5:  //Trigger CFI [PK, yes/no]
+      if (request[1] != 65535) ACTIVATE_CFI = request[1];
+      break;
+    case 6:  //Enable/disable LEDs [PK, enable/disable]
+      if (request[1] != 65535) ENABLE_LEDs = request[1];
+      break;
+    case 7:  //Enabled/disable bed peltiers [PK, enable/disable]
+      if (request[1] != 65535) ENABLE_BPLRs = request[1];
+      break;
+  }
+}
+
+
+void send_reply() {
+  writeInt16(request[0]);                                                         // Send PK
+  //for (int i=1; i < ((sizeof(request)/sizeof(request[0]))); i++) {
+  //  writeInt16(request[i]);
+  //}
+  switch (request[0]) {
+    case 0:  //Read diagnostics, [PK]
+      writeInt16((unsigned int) (target_temp * 10));
+      writeInt16(B_intensity);
+      writeInt16(I_intensity);
+      writeInt16(W_intensity);
+      writeInt16(R_intensity);
+      writeInt16(ACTIVATE_CFI);
+      writeInt16(ENABLE_LEDs);
+      writeInt16(ENABLE_BPLRs);
+      break;
+    case 1:  //Set lights, [PK, Blue, IR, White, Red]
+      break;
+    case 2:  //Set temperature, [PK, T]
+      break;
+    case 3:  //Read temperature, [PK]
+      writeInt16((unsigned int) (temp0 * 10));
+      writeInt16((unsigned int) (temp1 * 10));
+      writeInt16((unsigned int) (temp2 * 10));
+      writeInt16((unsigned int) (temp3 * 10));
+      writeInt16((unsigned int) (temp4 * 10));
+      writeInt16((unsigned int) (temp5 * 10));
+      break;
+    case 4:  //Set CFI procedure [PK, instructions, 500]
+      break;
+    case 5:  //Trigger CFI [PK, yes/no]
+      break;
+    case 6:  //Enable/disable LEDs [PK, enable/disable]
+      break;
+    case 7:  //Enabled/disable bed peltiers [PK, enable/disable]
+      break;
+  }
+  unsigned long ul_elapsed_time = (unsigned long) (millis() - receive_time);      // Do this on different line to constrain (see docs)
+  unsigned int elapsed_time = constrain(ul_elapsed_time, 0, 65535);               // Avoid overflows
+  writeInt16(elapsed_time);                                                       // Send elapsed time since start of message
+  writeInt16(flushed_bytes);                                                      // Send number of erroneous extra bytes received
+}
+
 
 int flush_serial() {
   // Flush the rest of the buffer by reading it all to nowhere
   int buffer_delay = 2;  // ms for host to write byte to buffer - will vary with connected device!
-  
+
   int flushed_bytes = 0;
   delay(buffer_delay);
   while (Serial.available() > 0) {
@@ -188,13 +330,13 @@ void update_bed_peltier_control(float targetTemp, float objTemp, int pinA, int p
 
   bool PUMP_ON;
   bool HEAT_ON;
-  
+
   float hotCutoff = targetTemp + 0.0;  // Offset from target temperature above which heating will stop
   float coldCutoff = targetTemp - 0.0; // Offset from target temperature below which cooling will stop
   // Triggers represent maximum and minimum acceptable temperatures for target
   float hotTrigger = targetTemp - 0.5; // Offset from target temperature below which heating will start
   float coldTrigger = targetTemp + 1; // Offset from target temperature above which cooling will start
-  
+
   float extremeHotLimit = 55.0;// Upper operating temp for peltier, above this it will shut down (e.g. thermal runaway)
   float hotLimit = 50.0; // Upper temperature limit for heating, peltier will not heat object beyond this limit
   float coldLimit = -5.0; // Lower temperature limit for cooling, peltier will not cool object beyond this limit
@@ -224,17 +366,21 @@ void update_bed_peltier_control(float targetTemp, float objTemp, int pinA, int p
   }
 
   /*
-  Serial.println(pinA);
-  Serial.print("PUMP ON: ");
-  Serial.println(PUMP_ON);
-  Serial.print("HEAT ON: ");
-  Serial.println(HEAT_ON);
-  Serial.print(objTemp);
-  Serial.print(", ");
-  Serial.println(targetTemp);
-  Serial.println();
+    Serial.println(pinA);
+    Serial.print("PUMP ON: ");
+    Serial.println(PUMP_ON);
+    Serial.print("HEAT ON: ");
+    Serial.println(HEAT_ON);
+    Serial.print(objTemp);
+    Serial.print(", ");
+    Serial.println(targetTemp);
+    Serial.println();
   */
-    
+
+  if (not ENABLE_BPLRs) {                  // Bed peltier override
+    PUMP_ON = false;
+  }
+
   if (PUMP_ON) {
     if (HEAT_ON) {
       digitalWrite(pinA, LOW);
@@ -259,12 +405,12 @@ void update_roof_peltier_control(int targetTemp, int objTemp, int plrPin) {
   float coldCutoff = targetTemp - 1; // Offset from target temperature below which cooling will stop
   // Trigger represents maximum acceptable temperatures for target
   float coldTrigger = targetTemp + 1; // Offset from target temperature above which cooling will start
-  
+
   float extremeHotLimit = 45.0;// Upper operating temp for peltier, above this it will shut down lights and peltier (e.g. thermal runaway)
   float coldLimit = -5.0; // Lower temperature limit for cooling, peltier will not cool object beyond this limit
-  
+
   if (objTemp > coldTrigger) {
-  
+
     // Way above target temperature
     PUMP_ON = true;
   } else if (objTemp < coldCutoff) {
@@ -306,101 +452,20 @@ void set_lights() {
   }
 }
 
-void activate_CFI() {
-  int CFI_state = 0;
-
-  unsigned long CFI_start;
-  unsigned long rf_start;
-  unsigned long sp_start;
-  int red_delay;
-  int sp_delay;
-  unsigned long al_start;
-  
-  while ((not OVERHEAT) and (CFI_state != 200) and (DOOR_CLOSED)) {
-    switch (CFI_state) {
-        
-      case 0:  // Dark adaption initiated 
-        analogWrite(BLUE_PIN, ml_intensity);
-        analogWrite(IR_PIN, 255);
-        analogWrite(WHITE_PIN, 255);
-        analogWrite(RED_PIN, 255);
-        CFI_start = millis();
-        CFI_state = 10;
-        break;
-        
-      case 10: // Wait for dark adaption timeout
-        if ((unsigned long)(millis() - CFI_start) > (da_time * 3600 * 1000)) {
-          CFI_state = 20;
-        }
-        break;
-        
-      case 20:  // Trigger red light
-        analogWrite(RED_PIN, rf_intensity);
-        rf_start = millis();
-        CFI_state = 30;
-        break;
-        
-      case 30: // Wait for red light timout
-        if ((unsigned long)(millis() - rf_start) > rf_duration) {
-          analogWrite(RED_PIN, 255);
-          CFI_state = 40;
-        }
-        break;
-
-      case 40: // Wait a short time after red is gone
-        red_delay = 50;  // ms
-        if ((unsigned long)(millis() - rf_start) > (rf_duration + red_delay)) {
-          CFI_state = 50;
-        }
-        break;
-
-      case 50:  // Activate first SP
-        analogWrite(BLUE_PIN, sp_intensity);
-        sp_start = millis();
-        CFI_state = 60;
-        break;
-
-      case 60:  // Wait for SP timeout
-        if ((unsigned long)(millis() - sp_start) > sp_duration) {
-          analogWrite(BLUE_PIN, 255);
-          CFI_state = 70;
-        }
-        break;
-
-      case 70:  // Wait short time after sp
-      sp_delay = 50;  // ms
-        if ((unsigned long)(millis() - sp_start) > (sp_duration + sp_delay)) {
-          CFI_state = 80;
-        }
-        break;
-
-      case 80:  // Trigger AL
-        analogWrite(BLUE_PIN, al_intensity);
-        al_start = millis();
-        CFI_state = 90;
-
-      case 90:  // Wait out until end of AL duration
-        if ((unsigned long)(millis() - al_start) > (al_duration)) {
-          analogWrite(BLUE_PIN, 255);
-          CFI_state = 200; // Abort CFI procedure
-        }
-        break;
-      update_data();
-      update_bed_peltier_control(target_temp, temp5, BED_PLR1A_PIN, BED_PLR1B_PIN);
-      update_roof_peltier_control(target_temp,temp0, ROOF_PLR_PIN);
-      update_limit_switch();  
-    }
-    analogWrite(BLUE_PIN, 255);
-    analogWrite(IR_PIN, 255);
-    analogWrite(WHITE_PIN, 255);
-    analogWrite(RED_PIN, 255);
-    ACTIVATE_CFI = false;
+void update_LED_relay() {
+  if (ENABLE_LEDs) {
+    digitalWrite(LED_POWER_PIN, HIGH);
+  } else {
+    digitalWrite(LED_POWER_PIN, LOW);
   }
+}
+
+void activate_CFI() {
 }
 
 
 void setup() {
-  
+
   pinMode(TIC0_PIN, INPUT);
   pinMode(TIC1_PIN, INPUT);
   pinMode(TIC2_PIN, INPUT);
@@ -428,7 +493,7 @@ void setup() {
   analogWrite(WHITE_PIN, 255);
   analogWrite(RED_PIN, 255);
   digitalWrite(ROOF_PLR_PIN, LOW);
-  digitalWrite(LED_POWER_PIN, HIGH);
+  digitalWrite(LED_POWER_PIN, LOW);
 
   Serial.begin(9600);
 }
@@ -439,8 +504,10 @@ void loop() {
   update_data();
   update_bed_peltier_control(target_temp, temp5, BED_PLR1A_PIN, BED_PLR1B_PIN);
   update_bed_peltier_control(target_temp, temp5, BED_PLR2A_PIN, BED_PLR2B_PIN);
-  update_roof_peltier_control(target_temp,temp0, ROOF_PLR_PIN);
+  update_roof_peltier_control(target_temp, temp0, ROOF_PLR_PIN);
   update_limit_switch();
+  update_LED_relay();
+
   if (DOOR_CLOSED) {
     set_lights();
   } else {
@@ -449,37 +516,21 @@ void loop() {
     analogWrite(WHITE_PIN, 220);
     analogWrite(RED_PIN, 255);
   }
+
   // update_display();
+
   if (ACTIVATE_CFI) {
     activate_CFI();
   }
 
-  int expected_bytes = sizeof(request);  // Number of bytes long the request will be
+  if (read_request() == 1) {
+    flushed_bytes = flush_serial();                                           // Clear any remaining (eroneous) bytes from the buffer and log how many cleared
+    interpret_request();                                                      // Carry out action of request
+    send_reply();                                                             // Send return data
+    received_ints = 0;
+    for (int i = 0; i < (sizeof(request)/sizeof(request[0])); i++) {
+      request[i] = 65535;                                                     // Reset data to be all 65535
+    }
+  }
 
-  if (received_bytes == expected_bytes) { // Update states for newly receieved request
-    flushed_bytes = flush_serial();  // Clear any remaining (eroneous) bytes from the buffer and log how many cleared
-    interpret_request();  // Read new instructions from request
-    send_ack();  // Send return data
-    received_bytes = 0;
-    for (int i = 0; i<sizeof(request); i++) {
-      request[i] = 0xFF;  // Reset data to be all 255
-    }
-  }
-  else if (Serial.available() > 0) { // Request is being received (ongoing)
-    if (received_bytes == 0) {
-      // This code only runs once per request
-      receive_time = millis();  // Time when first byte of message was received
-    }
-    // read the incoming byte:
-    incomingByte = Serial.read();
-    if (incomingByte != 10) {  // If incoming byte isn't a new-line character
-      request[received_bytes] = incomingByte;
-      received_bytes = received_bytes + 1;
-      last_received = millis();
-    }
-  }
-  else if (received_bytes > 0 and ((unsigned long)(millis()-last_received)) > serial_timeout) {
-    received_bytes = expected_bytes; // Jump to the processing, assume nothing else is coming
-  }
-  
 }
