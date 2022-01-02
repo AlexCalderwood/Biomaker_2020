@@ -125,29 +125,12 @@ bool update_limit_switch() {
    5. Update RPI reply_lengths
 */
 
-int request_lengths[8] = {  // Length of each message, excluding PK at start of each message
-  // 0. Read diagnostics
-  0,
-  // 1. Set lights, [Blue, IR, White, Red]
-  4,
-  // 2. Set temperature, [T]
-  1,
-  // 3. Read temperature, []
-  0,
-  // 4. Set CFI procedure [instructions, 500]
-  501,
-  // 5. Trigger CFI [yes/no]
-  1,
-  // 6. Enable/disable LEDs [enable/disable]
-  1,
-  // 7. Enabled/disable bed peltiers [enable/disable]
-  1
-};
 
 
 // Request is initialised as 65535 which is overwritten as correct data comes in, or not if the request times out
 unsigned int request[5] = {65535, 65535, 65535, 65535, 65535};
 unsigned int CFI_recipe[500];
+int CFI_instructions = 0;
 int received_ints = 0;
 int expected_ints = 1;
 unsigned long receive_time;
@@ -155,6 +138,24 @@ unsigned long last_received;  // Time most recent byte was received
 int serial_timeout = 500;  // Time until message is presumed dead and buffer (data array) is emptied
 int flushed_bytes = 0;
 
+int request_lengths[8] = {  // Length of each message, excluding PK at start of each message
+  // 0. Read diagnostics, []
+  0,
+  // 1. Set lights, [Blue, IR, White, Red]
+  4,
+  // 2. Set temperature, [T]
+  1,
+  // 3. Read temperature, []
+  0,
+  // 4. Set CFI procedure, [instructions, 500]
+  1 + (sizeof(CFI_recipe)/sizeof(unsigned int)),
+  // 5. Trigger CFI, [yes/no]
+  1,
+  // 6. Enable/disable LEDs, [enable/disable]
+  1,
+  // 7. Enabled/disable bed peltiers, [enable/disable]
+  1
+};
 
 int parseUInt() {
   /*
@@ -203,7 +204,7 @@ int read_request() {
     received_ints = expected_ints;                                          // Jump to the processing, assume nothing else is coming
 
   } else if (Serial.available() > 1) {                                        // If at least one 16-bit int has been received
-    if (request[0] == 4 and received_ints > 2) {                              // If CFI procedure (PK=4) is being set, and PK + instructions have arrived
+    if (request[0] == 4 and received_ints >= 2) {                              // If CFI procedure (PK=4) is being set, and PK + instructions have arrived
       CFI_recipe[received_ints - 2] = parseUInt();                            // Save data to the CFI_recipe array instead
     } else {
       request[received_ints] = parseUInt();                                   // Insert the new int into the request array (any error in receiving is read as 65535 (error state))
@@ -229,7 +230,10 @@ int interpret_LED_intensity(int brightness) {
   /*
      Takes in Uint (0-255, 0 is off, 255 is bright), and returns value LEDs will use (programmatically, 255 is off, 0 is bright)
   */
-  brightness = constrain(brightness, 0, 255);    // Limit values between 0 and 255
+  if (brightness == 65535) {                      // If erroneous value slips through somewhere (e.g. CFI)
+    brightness = 0;                               // Set lights to off (safest)
+  }
+  brightness = constrain(brightness, 0, 255);     // Limit values between 0 and 255
   return 255 - brightness;                        // Convert user value to programmatic value
 }
 
@@ -249,6 +253,7 @@ void interpret_request() {
     case 3:  //Read temperature, [PK]
       break;
     case 4:  //Set CFI procedure [PK, instructions, 500]
+    if (request[1] != 65535) CFI_instructions = request[1];
       break;
     case 5:  //Trigger CFI [PK, yes/no]
       if (request[1] != 65535) ACTIVATE_CFI = request[1];
@@ -265,7 +270,7 @@ void interpret_request() {
 
 void send_reply() {
   writeInt16(request[0]);                                                         // Send PK
-  //for (int i=1; i < ((sizeof(request)/sizeof(request[0]))); i++) {
+  //for (int i=1; i < (sizeof(request)/sizeof(request[0])); i++) {
   //  writeInt16(request[i]);
   //}
   switch (request[0]) {
@@ -292,6 +297,9 @@ void send_reply() {
       writeInt16((unsigned int) (temp5 * 10));
       break;
     case 4:  //Set CFI procedure [PK, instructions, 500]
+      //for (int i=0; i < (sizeof(CFI_recipe)/sizeof(unsigned int)); i++) {
+      //  writeInt16(CFI_recipe[i]);
+      //}
       break;
     case 5:  //Trigger CFI [PK, yes/no]
       break;
@@ -452,6 +460,7 @@ void set_lights() {
   }
 }
 
+
 void update_LED_relay() {
   if (ENABLE_LEDs) {
     digitalWrite(LED_POWER_PIN, HIGH);
@@ -460,7 +469,47 @@ void update_LED_relay() {
   }
 }
 
+
+unsigned long CFI_start = 0;
+unsigned long next_change = 0;
+int CFI_state = -1;
+int old_B = 0;
+int old_I = 0;
+int old_W = 0;
+int old_R = 0;
+
 void activate_CFI() {
+  /*  Function to enact any fast-changing procedures that the Pi may not be able to communicate in time, e.g. quick pulses in CFI. The procedure must be written into CFI_recipe in advance.
+   *  CFI_recipe has a maximum of 100 states, each with a max duration of 65545ms. Therefore a recipe can last at most 6554.5s, or ~1h50 minutes
+   */
+
+   if (CFI_state == -1) {                                               // During first iteration
+    CFI_start = millis();                                               // Record start time
+    old_B = B_intensity;                                                // Save state of lights
+    old_I = I_intensity;
+    old_W = W_intensity;
+    old_R = R_intensity;
+   }
+  if (CFI_state < (CFI_instructions-1)) {                               // While there are instructions still to complete (CFI might not use all 500)
+    if ((unsigned long) (millis()-CFI_start) >= next_change) {           // If the state needs to change
+      CFI_state += 1;                                                   // Move to new state
+      B_intensity = interpret_LED_intensity(CFI_recipe[(CFI_state*5)]);                          // Update lights
+      I_intensity = interpret_LED_intensity(CFI_recipe[(CFI_state*5) + 1]);
+      W_intensity = interpret_LED_intensity(CFI_recipe[(CFI_state*5) + 2]);
+      R_intensity = interpret_LED_intensity(CFI_recipe[(CFI_state*5) + 3]);
+      next_change += CFI_recipe[(CFI_state*5) + 4];                     // Add on duration of next state onto time until change
+      
+    }
+  } else {                                                              // No more instructions to complete
+    ACTIVATE_CFI = 0;                                                   // End CFI
+    CFI_start = 0;                                                      // Reset all variables 
+    next_change = 0;
+    CFI_state = -1;
+    B_intensity = old_B;                                                // Revert lights to original state
+    I_intensity = old_I;
+    W_intensity = old_W;
+    R_intensity = old_R;
+  }
 }
 
 
@@ -508,6 +557,10 @@ void loop() {
   update_limit_switch();
   update_LED_relay();
 
+  if (ACTIVATE_CFI) {
+    activate_CFI();
+  }
+
   if (DOOR_CLOSED) {
     set_lights();
   } else {
@@ -519,9 +572,7 @@ void loop() {
 
   // update_display();
 
-  if (ACTIVATE_CFI) {
-    activate_CFI();
-  }
+
 
   if (read_request() == 1) {
     flushed_bytes = flush_serial();                                           // Clear any remaining (eroneous) bytes from the buffer and log how many cleared

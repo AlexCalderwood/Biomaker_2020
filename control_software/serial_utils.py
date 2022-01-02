@@ -90,8 +90,8 @@ def run():
     time.sleep(2)
     try:
         # Send request
-        #print("sent:", send_request(ser, [4, 220] + [1,2,3,4,5]*100))
-        print("sent:", send_request(ser, [7, 0]))
+        #print("sent:", send_request(ser, [4, 6, 0,0,0,0,1000, 0,0,0,50,1000, 0,0,50,0,1000, 0,0,0,50,1000, 0,0,50,0,1000, 0,0,0,0,1000] + [0,0,0,0,0]*94))
+        print("sent:", send_request(ser, [5, 1]))
         print(read_reply(ser))
 
         # Read diagnostics
@@ -101,5 +101,5 @@ def run():
     finally:
         ser.close()
 
-if __name__ == "__main__":
-    run()
+#if __name__ == "__main__":
+#    run()
