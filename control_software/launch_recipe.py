@@ -24,7 +24,6 @@ def run(recipe):
     NIR_PORT = get_camera_port("USB 2.0 Camera")
     MIR_PORT = get_camera_port("PureThermal")
     NIRCamera = initialise_NIR(NIR_PORT)
-    print(os.system(f"v4l2-ctl -d {NIR_PORT} -C exposure_absolute"))
     MIRCamera = initialise_MIR()
     RGBCamera = initialise_RGB()
     EXPOSURE_SET = False
@@ -64,10 +63,11 @@ def run(recipe):
                         if read_reply(ser)[0] == None:  # If the PK of the response is erroneous throw and error
                             raise RuntimeError("Arduino returned erroneous instruction primary key - picamera gains may not be set")
                         EXPOSURE_SET = True
-                        if set_picamera_gains(RGBCamera, ser, 1, 0.1):  # If picamera gains have been set successfully
+                        if True:# or set_picamera_gains(RGBCamera, ser, 1, 0.1):  # If picamera gains have been set successfully
                             EXPOSURE_SET = True
                             send_request(ser, [1, 0, 0, 0 ,0])  # Turn off calibration lights
                             read_reply(ser)                     # Read arduino response from buffer (to clear buffer)
+                            sleep(0.1)
 
                     else:  # Test can proceed
                         now = datetime.now()
