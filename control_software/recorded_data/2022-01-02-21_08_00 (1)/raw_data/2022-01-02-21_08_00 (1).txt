@@ -1,4 +1,0 @@
-Time, T0, T1, T2, T3, T4, T5
-
-
-{logtimestr}: set_picamera_gains() missing 4 required positional arguments: 'picamera', 'ser', 'target', and 'targ_error'

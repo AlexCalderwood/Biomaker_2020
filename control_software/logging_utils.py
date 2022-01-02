@@ -69,5 +69,5 @@ def format_data_string(env_data):
     for i in range(len(env_data)):  # Record only time-of-request, and 8-12 inclusive
         data_string += str(env_data[i])
         data_string += ", "
-    data_string.strip(", ")
+    data_string = data_string.strip(", ")
     return data_string

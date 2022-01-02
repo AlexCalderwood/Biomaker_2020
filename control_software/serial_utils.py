@@ -66,13 +66,11 @@ def read_reply(ser):
         pk = int.from_bytes(nextBytes, "little")    # Decode first int, the PK of the response
         received_data = [pk]
     else:
-        print("No reply")
         return None                                 # Message has not been received
     if pk == 65535:
         received_data = [None]
         incomingInts = 2                           # If arduino has received erroneous PK, will still reply [et,dB] (this is its own unique reply, but no corresponding request)
     else:
-        print("PK", pk)
         incomingInts = reply_lengths[pk]
     for x in range(incomingInts):
         nextBytes = ser.read(2)                     # Read next 16-bit int

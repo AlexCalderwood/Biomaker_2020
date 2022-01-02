@@ -15,7 +15,6 @@ def run(recipe):
     start_time = None
     save_path = None
     dirname = ""
-    picam = None
     
     # Open serial link with Arduino
     ser = open_serial("/dev/ttyACM0")
@@ -25,6 +24,7 @@ def run(recipe):
     NIR_PORT = get_camera_port("USB 2.0 Camera")
     MIR_PORT = get_camera_port("PureThermal")
     NIRCamera = initialise_NIR(NIR_PORT)
+    print(os.system(f"v4l2-ctl -d {NIR_PORT} -C exposure_absolute"))
     MIRCamera = initialise_MIR()
     RGBCamera = initialise_RGB()
     EXPOSURE_SET = False
@@ -93,17 +93,16 @@ def run(recipe):
                                 print("Bed peltiers enabled:", reply[8])
                                 print()
                             elif data[1] == 1:  # Set lights
-                                send_request(ser, data[1:])
+                                send_request(ser, data[1:])  # Send request from file excluding date/time
                                 reply = read_reply(ser)
                             elif data[1] == 2:  # Set target temperature
                                 send_request(ser, data[1:])
                                 reply = read_reply(ser)
                             elif data[1] == 3:  # Read temperatures and save to file
-                                logtime = datetime.now()
+                                logtimestr = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                                 send_request(ser, data[1:])
                                 reply = read_reply(ser)
-                                reply.insert(0, logtime)
-                                save_data(save_path, dirname, reply)
+                                save_data(save_path, dirname, [logtimestr] + [x/10 for x in reply[1:-2]])
                             elif data[1] == 4:  # Set CFI procedure
                                 send_request(ser, data[1:])
                                 reply = read_reply(ser)
@@ -123,7 +122,7 @@ def run(recipe):
                                 RGBtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
                                 RGBimg = np.empty((2464, 3296, 3), dtype=np.uint8)
                                 try:
-                                    picam.capture(RGBimg, 'bgr')
+                                    RGBCamera.capture(RGBimg, 'bgr')
                                 except Exception as e:
                                     print("Picamera error:", e)
                             elif data[1] == 10:  # Take NIR image
