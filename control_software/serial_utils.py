@@ -86,12 +86,18 @@ def read_reply(ser):
 
 
 def run():
-    ser = open_serial("COM5")
+    ser = open_serial("/dev/ttyACM0")
     time.sleep(2)
     try:
         # Send request
-        #print("sent:", send_request(ser, [4, 6, 0,0,0,0,1000, 0,0,0,50,1000, 0,0,50,0,1000, 0,0,0,50,1000, 0,0,50,0,1000, 0,0,0,0,1000] + [0,0,0,0,0]*94))
-        print("sent:", send_request(ser, [5, 1]))
+        #print("sent:", send_request(ser, [6, 1]))
+        #print(read_reply(ser))
+        #print("sent:", send_request(ser, [4, 2, 0,0,0,100,1000, 0,0,0,100,2000]))# + [0,0,0,0,0]*94))
+        #print(read_reply(ser))
+        #time.sleep(1)
+        #print("sent:", send_request(ser, [5, 1]))
+        #print(read_reply(ser))
+        print("sent:", send_request(ser, [6, 0]))
         print(read_reply(ser))
 
         # Read diagnostics
@@ -101,5 +107,5 @@ def run():
     finally:
         ser.close()
 
-#if __name__ == "__main__":
-#    run()
+if __name__ == "__main__":
+    run()

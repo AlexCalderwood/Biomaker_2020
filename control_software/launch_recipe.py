@@ -25,7 +25,7 @@ def run(recipe):
     NIR_PORT = get_camera_port("USB 2.0 Camera")
     MIR_PORT = get_camera_port("PureThermal")
     NIRCamera = initialise_NIR(NIR_PORT)
-    MIRCamera = initialise_MIR(MIR_PORT)
+    MIRCamera = initialise_MIR()
     RGBCamera = initialise_RGB()
     EXPOSURE_SET = False
 
@@ -47,12 +47,11 @@ def run(recipe):
                     headers = "Time, T0, T1, T2, T3, T4, T5"  # Headers of logfile
                     with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", "a") as datafile:  # Create new logfile
                         datafile.write(headers + "\n")  # Write headers with a newline character on the end
-                print(data)
                 while True:
                     if not EXPOSURE_SET:  # Set exposure of RGB camera
                         # Check serial is functioning
                         time_since_ser = (datetime.now() - ser_opened).seconds  # Record time since ser was opened
-                        if time_since_ser > 0:
+                        if time_since_ser < 2.5:
                             sleep(2.5-time_since_ser)   # Sleep until at least 2.5 seconds have elapsed since ser was opened
                         
                         # Enable LEDs
@@ -64,8 +63,8 @@ def run(recipe):
                         send_request(ser, [1, 0, 0, 50, 0])  # Turn on white lights to calibrate camera
                         if read_reply(ser)[0] == None:  # If the PK of the response is erroneous throw and error
                             raise RuntimeError("Arduino returned erroneous instruction primary key - picamera gains may not be set")
-
-                        if set_picamera_gains():  # If picamera gains have been set successfully
+                        EXPOSURE_SET = True
+                        if set_picamera_gains(RGBCamera, ser, 1, 0.1):  # If picamera gains have been set successfully
                             EXPOSURE_SET = True
                             send_request(ser, [1, 0, 0, 0 ,0])  # Turn off calibration lights
                             read_reply(ser)                     # Read arduino response from buffer (to clear buffer)
@@ -75,7 +74,7 @@ def run(recipe):
                         time_to_wait = (data[0] - now).total_seconds()
                         print("Time to wait:", time_to_wait)
                         if  time_to_wait <= 0:  # Time to carry out command
-                            print("Env data")
+                            print("data:", data[1:])
                             if (datetime.now() - ser_opened).total_seconds() < 2:
                                 print("Preparing serial")
                                 sleep(2-(datetime.now()-ser_opened).total_seconds)

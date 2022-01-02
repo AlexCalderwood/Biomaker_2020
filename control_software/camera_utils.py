@@ -1,4 +1,4 @@
-from serial_utils import send_request
+from serial_utils import send_request, read_reply
 import cv2
 import picamera
 import picamera.array
@@ -15,17 +15,18 @@ from time import sleep
 def get_camera_port(camera_name):
     """ Function to determine camera device number based on name of device - takes in string and matches to v4l2 devices
     """
-    cam_num = None
+    cam_nums = []
     for file in os.listdir("/sys/class/video4linux"):                                       # Search through list of device files available to RPi
         real_file = os.path.realpath("/sys/class/video4linux/" + file + "/name")
         if os.path.exists(real_file):                                                       # If device has a file called "name"
             with open(real_file, "rt") as name_file:
                 name = name_file.read().rstrip()                                            # Open the file, and extract the name of the device
             if camera_name in name:                                                         # If the desired name is present
-                cam_num = int(re.search("\d+$", file).group(0))                             # extract the one-or-more (+) digits (\d) followed by an end-line ($) from the folder name
-                return cam_num - 1                                                          # Each devices has two consecutive numbers, larger is found first - we need the smaller
-        else:
-            return -1                                                                       # Failed to find any port
+                cam_nums.append(int(re.search("\d+$", file).group(0)))                      # extract the one-or-more (+) digits (\d) followed by an end-line ($) from the folder name
+    if len(cam_nums) > 0:
+        return min(cam_nums)                                                                 # Each devices has two consecutive numbers, larger is found first - we need the smaller
+    else:
+        return None
 
 
 def initialise_NIR(NIR_PORT, exposure_absolute=16, resolution=(1920,1080)):
@@ -81,6 +82,7 @@ def set_picamera_gains(picamera, ser, target, targ_error, initial_brightness=0, 
     while True:
         sleep(0.5)                                                 # Pause to allow lights to set and camera to adjust.
         send_request(ser, [1, 0, 0, brightness, 0])
+        read_reply(ser)
         DGerror = abs(picamera.digital_gain - target)
         AGerror = abs(picamera.analog_gain - target)
         new_error = DGerror + AGerror                                   # Calculate new error
