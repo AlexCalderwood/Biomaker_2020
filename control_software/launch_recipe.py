@@ -1,6 +1,6 @@
 from logging_utils import convert_recipe_line, create_new_dir, save_data
 from serial_utils import open_serial, send_request, read_reply
-from camera_utils import get_camera_port, initialise_RGB, initialise_NIR, initialise_MIR, set_picamera_gains
+from camera_utils import get_camera_port, initialise_RGB, initialise_NIR, initialise_MIR, set_picamera_gains, get_video_object
 from picamera import PiCamera
 from time import sleep
 from datetime import datetime
@@ -27,6 +27,10 @@ def run(recipe):
     MIRCamera = initialise_MIR()
     RGBCamera = initialise_RGB()
     EXPOSURE_SET = False
+    
+    RGB_RECORDING = False
+    NIR_RECORDING = False
+    MIR_RECORDING = False
 
     try:
         with open(read_path+recipe) as f:  # Open recipe file
@@ -73,6 +77,14 @@ def run(recipe):
                         now = datetime.now()
                         time_to_wait = (data[0] - now).total_seconds()
                         print("Time to wait:", time_to_wait)
+                        if RGB_RECORDING:
+                            pass
+                        if NIR_RECORDING:
+                            _, NIRimg = NIRCamera.read()
+                            NIRimg = cv2.rotate(NIRimg, cv2.ROTATE_180)
+                            NIRVideo.write(NIRimg)
+                        if MIR_RECORDING:
+                            pass
                         if  time_to_wait <= 0:  # Time to carry out command
                             print("data:", data[1:])
                             if (datetime.now() - ser_opened).total_seconds() < 2:
@@ -133,21 +145,59 @@ def run(recipe):
                                 MIRtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
                                 MIRimg = MIRCamera.grab(MIR_PORT)
                             elif data[1] == 12:  # Save latest RGB image
-                                cv2.imwrite(f"{save_path}{dirname}/raw_data/RBG{RGBtimestr}.jpg", RGBimg)
+                                cv2.imwrite(f"{save_path}{dirname}/raw_data/RGB{RGBtimestr}.jpg", RGBimg)
                             elif data[1] == 13:  # Save latest NIR image
                                 cv2.imwrite(f"{save_path}{dirname}/raw_data/NIR{NIRtimestr}.jpg", NIRimg) 
                             elif data[1] == 14:  # Save latest MIR image
                                 cv2.imwrite(f"{save_path}{dirname}/raw_data/MIR{MIRtimestr}.jpg", MIRimg)
-                            elif data[1] == 15:  # Take RGB video
+                            elif data[1] == 15:  # Initialise RGB recording
                                 pass
-                            elif data[1] == 16:  # Take NIR video
+                            elif data[1] == 16:  # Initialise NIR recording
+                                NIRVtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
+                                NIRVideo = get_video_object(f"{save_path}{dirname}/raw_data/NIR{NIRVtimestr}.avi", 12.0, (1920,1080), "MJPG")
+                            elif data[1] == 17:  # Initialise MIR recording
                                 pass
-                            elif data[1] == 17:  # Take MIR video
+                            elif data[1] == 18:  # Start RGB recording
+                                RGB_RECORDING = True
+                                RGBVtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
+                                RGBCamera.start_recording(f"{save_path}{dirname}/raw_data/RGB{RGBVtimestr}.mjpeg")
+                            elif data[1] == 19:  # Start NIR recording
+                                NIR_RECORDING = True
+                            elif data[1] == 20:  # Start MIR recording
+                                MIR_RECORDING = True
+                            elif data[1] == 21:  # Stop RGB recording
+                                RGB_RECORDING = False
+                                RGBCamera.stop_recording()
+                            elif data[1] == 22:  # Stop NIR recording
+                                NIR_RECORDING = False
+                            elif data[1] == 23:  # Stop MIR recording
+                                MIR_RECORDING = False
+                            elif data[1] == 24:  # Start fast RGB record
+                                RGBVtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
+                                RGBCamera.start_recording(f"{save_path}{dirname}/raw_data/RGB{RGBVtimestr}.mjpeg")
+                                RGBCamera.wait_recording(data[2])
+                                RGBCamera.stop_recording()
+                            elif data[1] == 25:  # Start fast NIR record
+                                start_time = datetime.now()
+                                while (datetime.now() - start_time).seconds < data[2]:
+                                    #_, NIRimg = NIRCamera.read()
+                                    #NIRimg = cv2.rotate(NIRimg, cv2.ROTATE_180)
+                                    #NIRVideo.write(NIRimg)
+                                    #sleep(0.1)
+                                    print(datetime.now())
+                            elif data[1] == 26:  # Start fast MIR record
                                 pass
+                            elif data[1] == 27:  # Start fast MIR record
+                                pass
+                            elif data[1] == 28:  # Start fast MIR record
+                                pass
+                            elif data[1] == 29:  # Start fast MIR record
+                                pass
+                            
                             break  # Move onto next line of file
-                        elif time_to_wait < 3:  # Start 'high-speed' polling at t-3 seconds
+                        elif time_to_wait < 3 and not (RGB_RECORDING or NIR_RECORDING or MIR_RECORDING):  # Start 'high-speed' polling at t-3 seconds
                             sleep(0.1)
-                        else:
+                        elif not (RGB_RECORDING or NIR_RECORDING or MIR_RECORDING):
                             print("Resting")
                             sleep(time_to_wait - 2.5)  # Wake up just before required time
     except Exception as e:
@@ -169,114 +219,6 @@ def run(recipe):
         NIRCamera.release()
         MIRCamera.release()
 
-
-
-def old_run(recipe):
-
-    #recipe = "recipe_1.csv"
-    read_path = "recipes/"
-    start_time = None
-    save_path = None
-    dirname = ""
-    picam = None
-    ser = open_serial("/dev/ttyACM0")
-    #ser = open_serial("COM9", timeout=5)
-    ser_opened = datetime.now()
-    NIR_PORT = get_camera_port("USB 2.0 Camera")
-    MIR_PORT = get_camera_port("PureThermal")
-    NIRCamera = initialise_NIR(NIR_PORT)
-    MIRCamera = initialise_MIR(MIR_PORT)
-    try:
-        with open(read_path+recipe) as f:  # Open recipe file
-            f.readline() # Skip first line containing headers
-            for line in f:
-                line = line.strip()  # Remove any newline or endline characters
-                data = convert_recipe_line(line)  # Extract data from string to correct formats
-
-                if start_time is None:  # First time opening a line
-                    start_time = data[0]  # Obtain start time of logging (first entry)
-                    save_path = "recorded_data/"  # Place to save the data
-                    dirname = start_time.strftime("%Y-%m-%d-%H_%M_%S")  # Convert start time to string format
-                    dirname = create_new_dir(save_path, dirname)  # Create new folder to put data in, and retrieve created folder name
-                    os.makedirs(save_path + dirname + "/raw_data")
-                    os.makedirs(save_path + dirname + "/processed_data")
-                    
-                    headers = "Time, T0, T1, T2, T3, T4, T5"  # Headers of logfile
-                    with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", "a") as datafile:  # Create new logfile
-                        datafile.write(headers + "\n")  # Write headers with a newline character on the end
-
-                while True:
-                    now = datetime.now()
-                    time_to_wait = (data[0] - now).total_seconds()
-                    print("Time to wait:", time_to_wait)
-                    if  time_to_wait <= 0:  # Time to carry out command
-                        print("Env data")
-                        if (datetime.now() - ser_opened).total_seconds() < 2:
-                            print("Preparing serial")
-                            sleep(2-(datetime.now()-ser_opened).total_seconds())
-                        request_env_data(ser, data)
-                        env_data = read_env_data(ser)
-                        print(env_data)
-                        if data[1]:
-                            print("data1", data[1])
-                            sleep(0.5)  # Let the white lights turn on
-                            logtime = datetime.now()
-                            logtimestr = logtime.strftime("%Y-%m-%d-%H_%M_%S")
-                            if not picam:
-                                print("Delayed PiCamera created")
-                                picam = PiCamera(resolution=(3280,2464))
-                                picam.rotation = 90
-                                picam.exposure_compensation = -25
-                                sleep(2)
-                            print("RGB Image")
-                            try:
-                                rgb_image = picam.capture(f"{save_path}{dirname}/raw_data/RBG{logtimestr}.jpg")
-                                pass
-                            except Exception as e:
-                                print("Picamera error:", e)
-                            ret, frame = NIRCamera.read()
-                            cv2.imwrite(f"{save_path}{dirname}/raw_data/NIR{logtimestr}.jpg", frame)
-                            ret, frame = MIRCamera.read()
-                            cv2.imwrite(f"{save_path}{dirname}/raw_data/MIR{logtimestr}.jpg", frame)
-                            print("Close camera")
-                            picam.close()
-                            picam = None
-                            # Save data
-                            print("Save data")
-                            env_data.insert(0, logtime)
-                            save_data(save_path, dirname, env_data)
-                        print("Finished")
-                        print("\n\n\n")
-                        break  # Move to the next line
-                    elif time_to_wait < 3:  # Start high-speed polling at t-3 seconds
-                        print("Polling")
-                        if (not picam) and data[1]: # If the picam has not already been woken up and it needs to be
-                            print("PiCamera created")
-                            picam = initialise_RGB()
-                            picam.rotation = 90
-                        sleep(0.1)
-                    else:
-                        print("Resting")
-                        sleep(time_to_wait - 2.5)  # Wake up just before required time
-    except Exception as e:
-        with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", "a") as datafile:  # Create new logfile
-            print("Log error:", e)
-            datafile.write("\n\n{logtimestr}: " + str(e))  # Write headers with a newline character on the end
-    finally:
-        #os.rename(f"{save_path}{dirname}/raw_data/{dirname}.tmp", f"{save_path}{dirname}/raw_data/{dirname}.txt")       
-        with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", 'r') as tmp:
-            with open(f"{save_path}{dirname}/raw_data/{dirname}.txt", 'w') as txt:
-                txt.write(tmp.read())
-        os.remove(f"{save_path}{dirname}/raw_data/{dirname}.tmp")
-
-        # Tidy up everything
-        if picam:
-            picam.close()
-            pass
-        ser.close()
-        NIRCamera.release()
-        MIRCamera.release()
-    
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:

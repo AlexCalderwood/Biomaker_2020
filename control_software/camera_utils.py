@@ -97,6 +97,13 @@ def set_picamera_gains(picamera, ser, target, targ_error, initial_brightness=0, 
         brightness += brightness_increment                              # If still searching, iterate brightness
 
 
+def get_video_object(save_path,framerate,resolution,vformat):
+    """ Function to generate video capture object - for use with NIR and MIR cameras.
+        Compatible video formats include MJPG, XVID, YUYV etc
+    """
+    fourcc = cv2.VideoWriter_fourcc(vformat[0], vformat[1], vformat[2], vformat[3])
+    return cv2.VideoWriter(save_path, fourcc, framerate, resolution)
+    
 # CREATE BASE CAMERA CLASS, THEN CREATE CLASSES FOR EACH TYPE OF CAMERA (FOR UNIFORMITY)
 # INITIALISE
 # (SET EXPOSURE, ONLY RGB)
