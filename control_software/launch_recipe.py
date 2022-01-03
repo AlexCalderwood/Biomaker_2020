@@ -242,6 +242,10 @@ def run(recipe):
             MIRCamera.close()
         except AttributeError:
             pass
+        try:
+            NIRVideo.release()
+        except:
+            pass
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
