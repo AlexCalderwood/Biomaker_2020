@@ -10,7 +10,7 @@ def convert_recipe_line(line):
     """
 
     # Splits string into relevent variables (still as strings)
-    data = line.split(", ")
+    data = line.split(",")
     
     # Empty strings (blank lines) will be parsed as [""]
     if data == [""]:

@@ -55,7 +55,10 @@ def run(recipe):
                     if NIR_RECORDING:
                         _, NIRimg = NIRCamera.read()
                         NIRimg = cv2.rotate(NIRimg, cv2.ROTATE_180)
-                        NIRVideo.write(NIRimg)
+                        NIRimgs.append(NIRimg)
+                        #NIRVideo.write(NIRimg)
+                        print(datetime.now() - now)
+                        print()
                     if MIR_RECORDING:
                         pass
                     if  time_to_wait <= 0:  # Time to carry out command
@@ -133,6 +136,7 @@ def run(recipe):
                             RGBCamera.start_recording(f"{save_path}{dirname}/raw_data/RGB{RGBVtimestr}.mjpeg")
                         elif data[1] == 19:  # Start NIR recording
                             NIR_RECORDING = True
+                            NIRimgs = []
                         elif data[1] == 20:  # Start MIR recording
                             MIR_RECORDING = True
                         elif data[1] == 21:  # Stop RGB recording
@@ -149,12 +153,16 @@ def run(recipe):
                             RGBCamera.stop_recording()
                         elif data[1] == 25:  # Start fast NIR record
                             start_time = datetime.now()
-                            while (datetime.now() - start_time).seconds < data[2]:
-                                #_, NIRimg = NIRCamera.read()
-                                #NIRimg = cv2.rotate(NIRimg, cv2.ROTATE_180)
-                                #NIRVideo.write(NIRimg)
-                                #sleep(0.1)
-                                print(datetime.now())
+                            while (datetime.now() - start_time).total_seconds() < data[2]:
+                                print("here1", datetime.now())
+                                _, NIRimg = NIRCamera.read()
+                                print("here2", datetime.now())
+                                NIRimg = cv2.rotate(NIRimg, cv2.ROTATE_180)
+                                print("here3", datetime.now())
+                                NIRVideo.write(NIRimg)
+                                print("here4", datetime.now())
+                                print()
+                            cv2.destroyAllWindows()
                         elif data[1] == 26:  # Start fast MIR record
                             pass
                         elif data[1] == 27:  # Enable RGBCamera
@@ -191,6 +199,11 @@ def run(recipe):
                             MIRCamera.close()
                         elif data[1] == 35:  # Disable serial
                             ser.close()
+                        elif data[1] == 36:  # Sleep
+                            sleep(data[2])
+                        elif data[1] == 37:  # Save NIR video
+                            for img in NIRimgs:
+                                NIRVideo.write(img)
                         break  # Move onto next line of file
                     elif time_to_wait < 3 and not (RGB_RECORDING or NIR_RECORDING or MIR_RECORDING):  # Start 'high-speed' polling at t-3 seconds
                         sleep(0.1)
@@ -201,9 +214,11 @@ def run(recipe):
         with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", "a") as datafile:  # Create new logfile
             print("Log error:", e)
             datafile.write("\n\n{logtimestr}: " + str(e))  # Write headers with a newline character on the end
-        send_request(ser, [6, 0])  # Disable LEDs
+        if ser is not None:
+            send_request(ser, [6, 0])  # Disable LEDs
     finally:
-        send_request(ser, [1, 0, 0, 0, 0])  # Set LEDs to off (for good measure)
+        if ser is not None:
+            send_request(ser, [1, 0, 0, 0, 0])  # Set LEDs to off (for good measure)
         #os.rename(f"{save_path}{dirname}/raw_data/{dirname}.tmp", f"{save_path}{dirname}/raw_data/{dirname}.txt")       
         with open(f"{save_path}{dirname}/raw_data/{dirname}.tmp", 'r') as tmp:
             with open(f"{save_path}{dirname}/raw_data/{dirname}.txt", 'w') as txt:
@@ -211,11 +226,22 @@ def run(recipe):
         os.remove(f"{save_path}{dirname}/raw_data/{dirname}.tmp")
 
         # Tidy up everything
-        ser.close()
-        RGBCamera.close()
-        NIRCamera.release()
-        MIRCamera.close()
-
+        try:
+            ser.close()
+        except AttributeError:
+            pass
+        try:
+            RGBCamera.close()
+        except AttributeError:
+            pass
+        try:
+            NIRCamera.release()
+        except AttributeError:
+            pass
+        try:
+            MIRCamera.close()
+        except AttributeError:
+            pass
 
 if __name__ == "__main__":
     if len(sys.argv) > 1:
