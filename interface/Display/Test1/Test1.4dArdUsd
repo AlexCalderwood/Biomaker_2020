@@ -1,0 +1,46 @@
+﻿Version     0.0
+Platform    Gen4-uLCD-32DT-AR-L
+PlatRes     240x320
+Depends
+end
+Options
+    Arduino_uSD
+    Speed                        9600
+    Checksum                     No
+    ResponseSize                 2
+    Multidrop                    No
+    Destination                  0
+    DestBank                     0
+    MainForm                     0
+    SndBuf                       0
+    ButtonDisable                No
+    SignedDigits                 No
+    MaxString                    75
+    ComPort                      0
+    ComTX1pinIdx                 0
+    ComRX1pinIdx                 0
+    FileSystem                   FATfs
+    FlashEraseOption             Optimal
+    SPIenable                    0
+    SPIsdo                       3
+    SPIsdi                       2
+    SPIsck                       1
+    FlashGT16MB                  No
+end
+Form
+    Name                         Form1
+    Alias                        Form1
+    Bgtype                       Color
+    Color                        0x1ADB34
+    Image                        (None)
+    Source.Height                0
+    Source.Left                  0
+    Source.Top                   0
+    Source.Width                 0
+    OnActivate                   ''
+    OnCreate                     ''
+    OnRepeat                     ''
+    OnTouchMoving                ''
+    OnTouchPressed               ''
+    OnTouchReleased              ''
+end
