@@ -51,7 +51,7 @@ int I_intensity = 255;
 int W_intensity = 255;
 int R_intensity = 255;
 int ACTIVATE_CFI = 0;
-int ENABLE_LEDs = 0;            // Controls mains relay for LEDs
+int ENABLE_LEDs = 1;            // Controls mains relay for LEDs
 int ENABLE_BPLRs = 0;           // Controls bed-peltiers (forces them into 'off' state if false)
 
 // Definitions for measured parameters
