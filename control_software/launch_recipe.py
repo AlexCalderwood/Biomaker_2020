@@ -109,7 +109,7 @@ def run(recipe):
                             try:
                                 RGBCamera.capture(RGBimg, 'bgr')
                             except Exception as e:
-                                print("Picamera error:", e)
+                                print("RGB camera error:", e)
                         elif data[1] == 10:  # Take NIR image
                             NIRtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
                             _, NIRimg = NIRCamera.read()
@@ -118,11 +118,11 @@ def run(recipe):
                             MIRtimestr = datetime.now().strftime("%Y-%m-%d-%H_%M_%S")
                             MIRimg = MIRCamera.grab(MIR_PORT)
                         elif data[1] == 12:  # Save latest RGB image
-                            cv2.imwrite(f"{save_path}{dirname}/raw_data/RGB{RGBtimestr}.jpg", RGBimg)
+                            cv2.imwrite(f"{save_path}{dirname}/raw_data/RGB{RGBtimestr}.png", RGBimg)
                         elif data[1] == 13:  # Save latest NIR image
-                            cv2.imwrite(f"{save_path}{dirname}/raw_data/NIR{NIRtimestr}.jpg", NIRimg) 
+                            cv2.imwrite(f"{save_path}{dirname}/raw_data/NIR{NIRtimestr}.png", NIRimg) 
                         elif data[1] == 14:  # Save latest MIR image
-                            cv2.imwrite(f"{save_path}{dirname}/raw_data/MIR{MIRtimestr}.jpg", MIRimg)
+                            cv2.imwrite(f"{save_path}{dirname}/raw_data/MIR{MIRtimestr}.png", MIRimg)
                         elif data[1] == 15:  # Initialise RGB recording
                             pass
                         elif data[1] == 16:  # Initialise NIR recording

@@ -43,7 +43,7 @@ def initialise_NIR(NIR_PORT, exposure_absolute=16, resolution=(1920,1080)):
     _, NIRimg = NIRCamera.read()                                                            # Must be called beforehand ?? to actually set the exposure
     os.system(f"v4l2-ctl -d {NIR_PORT} -c exposure_absolute={exposure_absolute}")           # -d specifies device, -c sets parameter
     os.system(f"v4l2-ctl -d {NIR_PORT} -c exposure_absolute={exposure_absolute}")           # Must be set at least twice??
-    for x in range(10):                                                                      # Takes about 5 reads to sink in !!??!
+    for x in range(5):                                                                      # Takes about 5 reads to sink in !!??!
         _, NIRimg = NIRCamera.read()
 
     return NIRCamera                                                                        # Return camera object

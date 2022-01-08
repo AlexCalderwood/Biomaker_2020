@@ -12,7 +12,7 @@ try:
         MIRimg = cv2.resize(MIRimg, None, fx=4, fy=4, interpolation=cv2.INTER_AREA)
         cv2.imshow("MIR Camera", MIRimg)
 
-        c = cv2.waitKey(0)
+        c = cv2.waitKey(1)
         if c != -1:
             break
 finally:

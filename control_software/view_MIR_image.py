@@ -10,9 +10,11 @@ def run(dataset, image_name):
     image_path = "recorded_data/" + dataset + "/raw_data/" + image_name
 
     try:
-        MIRimg = cv2.imread(image_path, 0)
+        MIRimg = cv2.imread(image_path, cv2.IMREAD_UNCHANGED)
     except:
-        raise ValueError("Invalid image name:", image_name)
+        raise ValueError("Invalid image or dataset combination:", image_name)
+    if MIRimg is None:
+        raise ValueError("Invalid image or dataset combination:", image_name)
     MIRimg = 255*((MIRimg - MIRimg.min())/(MIRimg.max()-MIRimg.min()))
     MIRimg = MIRimg.astype(np.uint8)
     MIRimg = cv2.resize(MIRimg, None, fx=4, fy=4, interpolation=cv2.INTER_AREA)
